@@ -1,8 +1,10 @@
 ;
-; Merlin32 Cross Dev Stub for the Jr Micro Kernel
+; 64tass Cross Dev Stub for the Jr Micro Kernel
 ;
-; To Assemble "merlin32 -v kexec.s"
+; To Assemble "64tass pexec.s -b -o pexec.bin"
 ;
+
+		.cpu "65c02"
 
 ; Platform-Exec
 ;
@@ -11,12 +13,10 @@
 ;         Load->Run KUP files
 ;         Load-Display 256 Picture files
 ;         Load-Display LBM Picture files
-;  
-
-		mx %11
+;
 
 ; some Kernel Stuff
-		put kernel_api.s
+		.include "kernel_api.s"
 
 ; Kernel uses MMU configurations 0 and 1
 ; User programs default to # 3
@@ -40,18 +40,18 @@ VKY_GR_CLUT_1 = $D400
 
 ; MMU modules needs 0-1F
 
-	dum $20
-temp0 ds 4
-temp1 ds 4
-temp2 ds 4
-temp3 ds 4
-	dend
+	.virtual $20
+temp0 .fill 4
+temp1 .fill 4
+temp2 .fill 4
+temp3 .fill 4
+	.endv
 
-	dum $20
-PGz_z ds 1
-PGz_addr ds 4
-PGz_size ds 4
-	dend
+	.virtual $20
+PGz_z .fill 1
+PGz_addr .fill 4
+PGz_size .fill 4
+	.endv
 
 ; Event Buffer at $30
 event_type = $30
@@ -59,30 +59,30 @@ event_buf  = $31
 event_ext  = $32
 
 event_file_data_read  = event_type+kernel_event_event_t_file_data_read
-event_file_data_wrote = event_type+kernel_event_event_t_file_wrote_wrote 
+event_file_data_wrote = event_type+kernel_event_event_t_file_wrote_wrote
 
 ; arguments
 args_buf = $40
 args_buflen = $42
 
-	dum $60
-temp7 ds 4
-temp8 ds 4
-temp9 ds 4
-temp10 ds 4
+	.virtual $60
+temp7 .fill 4
+temp8 .fill 4
+temp9 .fill 4
+temp10 .fill 4
 
-progress ds 2     ; progress counter
-show_prompt ds 1  ; picture viewer can hide the press key prompt
+progress .fill 2     ; progress counter
+show_prompt .fill 1  ; picture viewer can hide the press key prompt
 
-pArg ds 2
-pExt ds 2		  ; used by the alternate_open
-	dend
+pArg .fill 2
+pExt .fill 2		  ; used by the alternate_open
+	.endv
 
 
-	dum $400
-scratch_path ds 256
-try_count ds 1
-	dend
+	.virtual $400
+scratch_path .fill 256
+try_count .fill 1
+	.endv
 
 ; copy of the mmu_lock function, down to zero page
 
@@ -97,22 +97,21 @@ mmu_lock_springboard = $80
 
 ; 8k Kernel Program, so it can live anywhere
 
-		org $A000
-		dsk pexec.bin
-sig		db $f2,$56		; signature
-		db 1            ; 1 8k block
-		db 5            ; mount at $a000
-		da start		; start here
-		db 1			; version
-		db 0			; reserved
-		db 0			; reserved
-		db 0			; reserved
-		asc '-' 		; This will require some discussion with Gadget
-		db 0
-		asc '<file>'	; argument list
-		db 0
-		asc '"pexec", load and execute file.'	; description
-		db 0
+		* = $A000
+sig		.byte $f2,$56		; signature
+		.byte 1            ; 1 8k block
+		.byte 5            ; mount at $a000
+		.word start		; start here
+		.byte 1			; version
+		.byte 0			; reserved
+		.byte 0			; reserved
+		.byte 0			; reserved
+		.text "-" 		; This will require some discussion with Gadget
+		.byte 0
+		.text "<file>"	; argument list
+		.byte 0
+		.text '"pexec", load and execute file.'	; description
+		.byte 0
 
 start
 		; store argument list, but skip over first argument (us)
@@ -125,21 +124,21 @@ start
 		sta	args_buf+1
 
 		lda	kernel_args_extlen
-		beq :zero_args				; validation, this should not be zero, but we'll accept it
-		dec
-		dec 						; subtract 2 - we get rid of "pexec" from the args list
-		bmi :zero_args              ; this is supposed to be positive
-		bit #1  		
-		bne :zero_args				; this is expected to be even
+		beq _zero_args				; validation, this should not be zero, but we'll accept it
+		dec a
+		dec a						; subtract 2 - we get rid of "pexec" from the args list
+		bmi _zero_args              ; this is supposed to be positive
+		bit #1
+		bne _zero_args				; this is expected to be even
 
 		sta	args_buflen 			; we've done some reasonable validation here
-		bra :seems_good_args
+		bra _seems_good_args
 
-:zero_args
+_zero_args
 		stz args_buflen
 		stz kernel_args_extlen
 
-:seems_good_args
+_seems_good_args
 
 		; Some variable initialization
 		stz progress
@@ -189,7 +188,7 @@ start
 		jsr TermPUTS
 
 		lda	args_buflen
-		bne	:has_argument
+		bne	_has_argument
 
 		lda #<txt_no_argument
 		ldx #>txt_no_argument
@@ -197,7 +196,7 @@ start
 
 		jmp	wait_for_key
 
-:has_argument		
+_has_argument
 		; Display the arguments, hopefully there are some
 		lda	#'"'
 		jsr	TermCOUT
@@ -218,7 +217,7 @@ start
 		sta kernel_args_events
 		lda #>event_type
 		sta kernel_args_events+1
-				 
+
 		; Set the drive
 		; currently hard-coded to drive 0, since drive not passed
 		stz file_open_drive
@@ -234,35 +233,35 @@ start
 		ldy #1
 		lda (pArg),y
 		cmp #':'
-		bne :no_device_passed_in
+		bne _no_device_passed_in
 
 		; OMG there's a device!
 		; if it's valid, maybe it can overide the device 0
 
 		lda (pArg)
 
-		inc <pArg
-		inc <pArg 		; fuck you if we need to wrap a page
+		inc pArg
+		inc pArg 		; fuck you if we need to wrap a page
 
 		sec
 		sbc #'0'
 		cmp #10
-		bcs :no_device_passed_in ; fucked up, so just use device 0
+		bcs _no_device_passed_in ; fucked up, so just use device 0
 
 		sta file_open_drive
 
-:no_device_passed_in
+_no_device_passed_in
 		lda pArg
 		ldx pArg+1
 
 		jsr fopen
-		bcc :opened
+		bcc _opened
 		; failed
 
 		; Micah suggested we make life easier, so we don't require the extension
 		; sounds good to me
 		jsr alternate_open
-		bcc :opened
+		bcc _opened
 
 		pha
 		lda #<txt_error_open
@@ -274,12 +273,12 @@ start
 		jsr TermCR
 
 		bra wait_for_key
-:opened
+_opened
 
 		; set address, system memory, to read
 		lda #<temp0
 		ldx #>temp0
-		ldy #0
+		ldy #`temp0
 		jsr set_write_address
 
 		; request 4 bytes
@@ -295,7 +294,7 @@ start
 		pla
 
 		cmp #4
-		beq :got4
+		beq _got4
 
 		pha
 
@@ -309,36 +308,36 @@ start
 		jsr TermCR
 
 		bra wait_for_key
-:got4
+_got4
 		jsr execute_file
 
 wait_for_key
 
 		lda show_prompt
-		bne :skip_prompt
+		bne _skip_prompt
 
 		lda #<txt_press_key
 		ldx #>txt_press_key
 		jsr TermPUTS
 
-:skip_prompt
+_skip_prompt
 
-]loop
+_loop
 		lda #<event_type
 		sta kernel_args_events
 		lda #>event_type
 		sta kernel_args_events+1
-]wait
+_wait
 		jsr kernel_NextEvent
-		bcs ]wait
+		bcs _wait
 
 		lda event_type
 		cmp #kernel_event_key_PRESSED
-		beq :done
+		beq _done
 
 		;jsr TermPrintAH
-		bra ]loop
-:done
+		bra _loop
+_done
 		jmp mmu_lock   ; jsr+rts
 
 ;------------------------------------------------------------------------------
@@ -349,18 +348,18 @@ execute_file
 ; identify the file
 		lda temp0
 		cmp #'Z'
-		beq :pgZ
+		beq _pgZ
 		cmp #'z'
-		beq :pgz
+		beq _pgz
 		cmp #'P'
-		beq :pgx
+		beq _pgx
 		cmp #'I'
-		beq :256
+		beq _256
 		cmp #'F'
-		beq :lbm
+		beq _lbm
 		cmp #$F2
-		beq :kup
-:done
+		beq _kup
+_done
 		lda #<txt_unknown
 		ldx #>txt_unknown
 		jsr TermPUTS
@@ -369,50 +368,50 @@ execute_file
 
 ;------------------------------------------------------------------------------
 ; Load /run KUP (Kernel User Program)
-:kup
+_kup
 		lda temp0+1
 		cmp #$56
-		bne :done
+		bne _done
 		lda temp0+2 	; size in blocks
-		beq :done   	; size 0, invalid
+		beq _done   	; size 0, invalid
 		cmp #6
-		bcs :done       ; size larger than 40k, invalid
+		bcs _done       ; size larger than 40k, invalid
 		lda temp0+3		; address mapping of block
-		beq	:done       ; can't map you in at block 0
+		beq	_done       ; can't map you in at block 0
 		cmp #6
-		bcs :done		; can't map you in at block 6 or higher
+		bcs _done		; can't map you in at block 6 or higher
 		jmp LoadKUP
 
 ;------------------------------------------------------------------------------
 ; Load / run pgZ Program
-:pgZ
+_pgZ
 		jmp LoadPGZ
-:pgz
+_pgz
 		jmp LoadPGz
-:pgx
+_pgx
 		lda temp0+1
 		cmp #'G'
-		bne :done
+		bne _done
 		lda temp0+2
 		cmp #'X'
-		bne :done
+		bne _done
 		lda temp0+3
 		cmp #3
-		bne :done
+		bne _done
 ;------------------------------------------------------------------------------
 ; Load / Run PGX Program
 		jmp LoadPGX
 
-:256
+_256
 		lda temp0+1
 		cmp #'2'
-		bne :done
+		bne _done
 		lda temp0+2
 		cmp #'5'
-		bne :done
+		bne _done
 		lda temp0+3
 		cmp #'6'
-		bne :done
+		bne _done
 ;------------------------------------------------------------------------------
 ; Load / Display 256 Image
 		jsr load_image
@@ -427,16 +426,16 @@ execute_file
 
 		jmp TermClearTextBuffer  ; jsr+rts
 ;
-:lbm
+_lbm
 		lda temp0+1
 		cmp #'O'
-		bne :done
+		bne _done
 		lda temp0+2
 		cmp #'R'
-		bne :done
+		bne _done
 		lda temp0+3
 		cmp #'M'
-		bne :done
+		bne _done
 ;------------------------------------------------------------------------------
 ; Load / Display LBM Image
 
@@ -465,9 +464,9 @@ execute_file
 LoadPGX
 		lda #<temp0
 		ldx #>temp0
-		ldy #^temp0
+		ldy #`temp0
 		jsr set_write_address
-		
+
 		lda	pArg
 		ldx pArg+1
 
@@ -477,12 +476,12 @@ LoadPGX
 		ldx #0
 		ldy #0
 		jsr fread
-		
+
 		lda temp1
 		ldx temp1+1
 		ldy temp1+2
 		jsr set_write_address
-		
+
 		; Try to read 64k, which should load the whole file
 		lda #0
 		tax
@@ -491,16 +490,16 @@ LoadPGX
 
 launchProgram
 		jsr fclose	; close PGX or PGZ
-		
+
 		lda #5
 		sta old_mmu0+5	; when lock is called it will map $A000 to physcial $A000
 
 		; need to place a copy of mmu_lock, where it won't be unmapped
 		ldx #mmu_lock_end-mmu_lock
-]lp		lda mmu_lock,x
+_lp		lda mmu_lock,x
 		sta mmu_lock_springboard,x
 		dex
-		bpl ]lp
+		bpl _lp
 
 		; construct more stub code
 		lda #$20   ; jsr mmu_lock_springboard
@@ -508,7 +507,7 @@ launchProgram
 		lda #<mmu_lock_springboard
 		sta temp0+1
 		lda #>mmu_lock_springboard
-		sta temp0+2 
+		sta temp0+2
 
 		lda #$4c
 		sta temp1-1  ; same as temp0+3
@@ -521,7 +520,7 @@ launchProgram
 		sta kernel_args_ext+1
 		lda args_buflen
 		sta kernel_args_extlen
-		
+
 		jmp temp0	; will jsr mmu_lock, then jmp to the start
 
 ;-----------------------------------------------------------------------------
@@ -535,24 +534,24 @@ LoadPGz
 		ldx pArg+1
 
 		jsr fopen
-		
+
 		lda #<PGz_z
 		ldx #>PGz_z
-		ldy #^PGz_z
+		ldy #`PGz_z
 		jsr set_write_address
-		
+
 		lda #9
-]loop
+_loop
 		ldx #0
 		ldy #0
 		jsr fread
-		
+
 		lda PGz_size
 		ora PGz_size+1
 		ora PGz_size+2
 		ora PGz_size+3
 		beq pgzDoneLoad
-		
+
 		lda PGz_addr
 		ldx PGz_addr+1
 		ldy PGz_addr+2
@@ -562,13 +561,13 @@ LoadPGz
 		ldx PGz_size+1
 		ldy PGz_size+2
 		jsr fread
-		
+
 		lda #<PGz_addr
 		ldx #>PGz_addr
-		ldy #^PGz_addr
+		ldy #`PGz_addr
 		jsr set_write_address
 		lda #8
-		bra ]loop
+		bra _loop
 
 ;-----------------------------------------------------------------------------
 LoadPGZ
@@ -581,23 +580,23 @@ LoadPGZ
 		ldx pArg+1
 
 		jsr fopen
-		
+
 		lda #<temp0
 		ldx #>temp0
-		ldy #^temp0
+		ldy #`temp0
 		jsr set_write_address
-		
+
 		lda #7
-]loop
+_loop
 		ldx #0
 		ldy #0
 		jsr fread
-		
+
 		lda temp1
 		ora temp1+1
 		ora temp1+2
 		beq pgzDoneLoad
-		
+
 		lda temp0+1
 		ldx temp0+2
 		ldy temp0+3
@@ -607,17 +606,17 @@ LoadPGZ
 		ldx temp1+1
 		ldy temp1+2
 		jsr fread
-		
-		lda #<temp0+1
-		ldx #>temp0+1
-		ldy #^temp0+1
+
+		lda #<(temp0+1)
+		ldx #>(temp0+1)
+		ldy #`(temp0+1)
 		jsr set_write_address
 		lda #6
-		bra ]loop
+		bra _loop
 
 pgzDoneLoad
 
-		; copy the start location, for the launch code fragment 
+		; copy the start location, for the launch code fragment
 		lda temp0+1
 		sta temp1
 		lda temp0+2
@@ -636,7 +635,7 @@ LoadKUP
 		lda pArg
 		ldx pArg+1
 
-		jsr fopen 
+		jsr fopen
 
 ; Set the address where we read data
 
@@ -693,7 +692,7 @@ load_image
 		; Address where we're going to load the file
 		lda #<IMAGE_FILE
 		ldx #>IMAGE_FILE
-		ldy #^IMAGE_FILE
+		ldy #`IMAGE_FILE
 		jsr set_write_address
 
 		; Request as many bytes as we can, and hope we hit the EOF
@@ -701,7 +700,7 @@ READ_BUFFER_SIZE = $080000-IMAGE_FILE
 
 		lda #<READ_BUFFER_SIZE
 		ldx #>READ_BUFFER_SIZE
-		ldy #^READ_BUFFER_SIZE
+		ldy #`READ_BUFFER_SIZE
 		jsr fread
 		; length read is in AXY, if we need it
 		jsr fclose
@@ -712,24 +711,24 @@ set_srcdest_clut
 		; Address where we're going to load the file
 		lda #<IMAGE_FILE
 		ldx #>IMAGE_FILE
-		ldy #^IMAGE_FILE
+		ldy #`IMAGE_FILE
 		jsr set_read_address
 
 		lda #<CLUT_DATA
 		ldx #>CLUT_DATA
-		ldy #^CLUT_DATA
+		ldy #`CLUT_DATA
 		jsr set_write_address
 		rts
 ;-----------------------------------------------------------------------------
 set_srcdest_pixels
 		lda #<IMAGE_FILE
 		ldx #>IMAGE_FILE
-		ldy #^IMAGE_FILE
+		ldy #`IMAGE_FILE
 		jsr set_read_address
 
 		lda #<PIXEL_DATA
 		ldx #>PIXEL_DATA
-		ldy #^PIXEL_DATA
+		ldy #`PIXEL_DATA
 		jsr set_write_address
 		rts
 ;-----------------------------------------------------------------------------
@@ -743,7 +742,7 @@ copy_clut
 		sta io_ctrl
 		; copy the clut up there
 		ldx #0
-]lp		lda CLUT_DATA,x
+_lp		lda CLUT_DATA,x
 		sta VKY_GR_CLUT_0,x
 		lda CLUT_DATA+$100,x
 		sta VKY_GR_CLUT_0+$100,x
@@ -752,7 +751,7 @@ copy_clut
 		lda CLUT_DATA+$300,x
 		sta VKY_GR_CLUT_0+$300,x
 		dex
-		bne ]lp
+		bne _lp
 
 		; set access back to text buffer, for the text stuff
 		lda #2
@@ -788,7 +787,7 @@ init320x240
 		sta $D101
 		lda #>PIXEL_DATA
 		sta $D102
-		lda #^PIXEL_DATA
+		lda #`PIXEL_DATA
 		sta $D103
 
 		lda #1
@@ -821,13 +820,13 @@ get_arg
 ;------------------------------------------------------------------------------
 ;
 ;
-ProgressIndicator 
+ProgressIndicator
 
 		lda #'.'
 		jsr TermCOUT
 
 		dec progress+1
-		bpl :return
+		bpl _return
 
 		lda #16
 		sta progress+1
@@ -839,11 +838,11 @@ ProgressIndicator
 
 		clc
 		lda progress
-		inc
+		inc a
 		cmp #64
-		bcc :no_wrap
+		bcc _no_wrap
 
-		dec
+		dec a
 		adc #4
 		tax
 
@@ -852,10 +851,10 @@ ProgressIndicator
 
 		lda #G_SPACE 	 ; erase the dude
 		jsr glyph_draw
-		
+
 		clc
 		lda #0     		 ; wrap to left
-:no_wrap
+_no_wrap
 		sta progress
 		adc #5
 		tax
@@ -874,7 +873,7 @@ ProgressIndicator
 		plx
 		jsr TermSetXY
 
-:return
+_return
 		rts
 
 ;------------------------------------------------------------------------------
@@ -888,129 +887,127 @@ ProgressIndicator
 alternate_open
 		pha				; preserve the initial error
 		stz try_count
-]try
-		jsr :copy_to_scratch
-		jsr :append_ext
+_try
+		jsr _copy_to_scratch
+		jsr _append_ext
 
 		lda #<scratch_path
 		ldx #>scratch_path
 		jsr fopen
-		bcc :opened
+		bcc _opened
 
 		; this path didn't work
 		inc try_count
 		lda try_count
 		cmp #5 				; there are 5 extensions
-		bcc ]try
+		bcc _try
 ; we failed 5 more times :-(
 		pla
 		rts
 
-:opened
+_opened
 		lda #<scratch_path
 		ldx #>scratch_path
 		sta pArg  			; make sure when the file is re-opened it uses this working path
 		stx pArg+1
 
 		pla				; restore original error
-:rts
+_rts
 		rts
 
-:append_ext
+_append_ext
 		; at this point y points at the 0 terminator in the scratch path
 		lda try_count
 		asl
 		asl
 		tax
-]ext_loop
-		lda |ext_table,x
-		sta |scratch_path,y
-		beq :rts
+_ext_loop
+		lda ext_table,x
+		sta scratch_path,y
+		beq _rts
 		inx
 		iny
-		bra ]ext_loop
+		bra _ext_loop
 
-:copy_to_scratch
+_copy_to_scratch
 		ldy #0
-]lp		lda (pArg),y
-		sta |scratch_path,y
-		beq :done_copy
+_lp		lda (pArg),y
+		sta scratch_path,y
+		beq _done_copy
 		iny
-		bne ]lp
+		bne _lp
 		; if we get here, things are fubar
 		dey
 		lda #0
-		sta |scratch_path,y
+		sta scratch_path,y
 		rts
 
-:done_copy
+_done_copy
 		lda #'.'
-		sta |scratch_path,y  ; replace the 0 terminator
+		sta scratch_path,y  ; replace the 0 terminator
 		iny
 
 		lda #0
-		sta |scratch_path,y  ; zero terminate
+		sta scratch_path,y  ; zero terminate
 		rts
 
 
 ;------------------------------------------------------------------------------
 ; Strings and other includes
-txt_version asc 'Pexec 0.65'
-		db 13,13,0
+txt_version .text "Pexec 0.65"
+		.byte 13,13,0
 
-txt_press_key db 13
-		asc '--- Press >ENTER< to continue ---'
-		db 13,0
-		
+txt_press_key .byte 13
+		.text "--- Press >ENTER< to continue ---"
+		.byte 13,0
+
 txt_unknown
-		asc 'Unknown application type'
-		db 13,13,0		
+		.text "Unknown application type"
+		.byte 13,13,0
 
-txt_launch asc 'launch: '
-		db 0
+txt_launch .text "launch: "
+		.byte 0
 
-txt_error_open asc 'ERROR: file open $'
-		db 0
-txt_error_notfound asc 'ERROR: file not found: '
-		db 0
-txt_error_reading asc 'ERROR: reading $'
-		db 0
-txt_error asc 'ERROR!'
-		db 13
-		db 0
-txt_open asc 'Open Success!'
-		db 13
-		db 0
-txt_no_argument asc 'Missing file argument'
-		db 13
-		db 0
+txt_error_open .text "ERROR: file open $"
+		.byte 0
+txt_error_notfound .text "ERROR: file not found: "
+		.byte 0
+txt_error_reading .text "ERROR: reading $"
+		.byte 0
+txt_error .text "ERROR!"
+		.byte 13
+		.byte 0
+txt_open .text "Open Success!"
+		.byte 13
+		.byte 0
+txt_no_argument .text "Missing file argument"
+		.byte 13
+		.byte 0
 ;------------------------------
 ext_table
-txt_pgz asc 'pgz',00
-txt_pgx asc 'pgx',00
-txt_kup asc 'kup',00
-txt_256 asc '256',00
-txt_lbm asc 'lbm',00
+txt_pgz .text "pgz",0
+txt_pgx .text "pgx",0
+txt_kup .text "kup",0
+txt_256 .text "256",0
+txt_lbm .text "lbm",0
 ;------------------------------
 
-txt_load_stuff asc 'Load your stuff: .pgx, .pgz, .kup, .lbm, .256',00
+txt_load_stuff .text "Load your stuff: .pgx, .pgz, .kup, .lbm, .256",0
 
 
 txt_glyph_pexec
-		db GP,GE,GX,GE,GC,0
+		.byte GP,GE,GX,GE,GC,0
 
 ;------------------------------------------------------------------------------
-		put mmu.s
-		put term.s
-		put lbm.s
-		put i256.s
-		put lzsa2.s
-		put file.s
-		put glyphs.s
-		put colors.s
-		put logo.s
+		.include "mmu.s"
+		.include "term.s"
+		.include "lbm.s"
+		.include "i256.s"
+		.include "lzsa2.s"
+		.include "file.s"
+		.include "glyphs.s"
+		.include "colors.s"
+		.include "logo.s"
 
 ; pad to the end
-		ds $C000-*,$EA
-; really pad to end, because merlin is buggy
-		ds \,$EA
+		.fill $C000-*, $EA

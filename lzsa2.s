@@ -2,13 +2,12 @@
 ; 65c02 lzsa2 decompressor, for F256 Jr
 ;
 ;------------------------------------------------------------------------------
-		mx %11
 
 ;
 ; ***************************************************************************
 ; ***************************************************************************
 ;
-; It's been hacked up for Merlin32 and the Jr.
+; It's been hacked up for 64tass and the Jr.
 ;
 ; lzsa2_6502.s
 ;
@@ -58,7 +57,7 @@ lzsa_length     =       lzsa_winptr             ; 1 word.
 DECOMPRESS_LZSA2_FAST
 lzsa2_unpack    ldx     #$00                    ; Hi-byte of length or offset.
                 ldy     #$00                    ; Initialize source index.
-                sty     <lzsa_nibflg            ; Initialize nibble buffer.
+                sty     lzsa_nibflg             ; Initialize nibble buffer.
 
                 ;
                 ; Copy bytes from compressed source data.
@@ -66,37 +65,37 @@ lzsa2_unpack    ldx     #$00                    ; Hi-byte of length or offset.
                 ; N.B. X=0 is expected and guaranteed when we get here.
                 ;
 
-:cp_length
+_cp_length
                 jsr     readbyte
 
-:cp_skip0       sta     <lzsa_cmdbuf            ; Preserve this for later.
+_cp_skip0       sta     lzsa_cmdbuf             ; Preserve this for later.
                 and     #$18                    ; Extract literal length.
-                beq     :lz_offset              ; Skip directly to match?
+                beq     _lz_offset              ; Skip directly to match?
 
                 lsr                             ; Get 2-bit literal length.
                 lsr
                 lsr
                 cmp     #$03                    ; Extended length?
-                bcc     :inc_cp_len
+                bcc     _inc_cp_len
 
                 inx
-                jsr     :get_length             ; X=1 for literals, returns CC.
+                jsr     _get_length             ; X=1 for literals, returns CC.
 
                 ora     #0                      ; Check the lo-byte of length
-                beq     :put_cp_len             ; without effecting CC.
+                beq     _put_cp_len             ; without effecting CC.
 
-:inc_cp_len     inx                             ; Increment # of pages to copy.
+_inc_cp_len     inx                             ; Increment # of pages to copy.
 
-:put_cp_len     stx     <lzsa_length
+_put_cp_len     stx     lzsa_length
                 tax
 
-:cp_page        jsr	readbyte
+_cp_page        jsr	readbyte
 				jsr writebyte
 
-:cp_skip2       dex
-                bne     :cp_page
-                dec     <lzsa_length            ; Any full pages left to copy?
-                bne     :cp_page
+_cp_skip2       dex
+                bne     _cp_page
+                dec     lzsa_length             ; Any full pages left to copy?
+                bne     _cp_page
 
                 ;
                 ; Copy bytes from decompressed window.
@@ -112,62 +111,62 @@ lzsa2_unpack    ldx     #$00                    ; Hi-byte of length or offset.
                 ; 111  repeat offset
                 ;
 
-:lz_offset      lda     <lzsa_cmdbuf
+_lz_offset      lda     lzsa_cmdbuf
                 asl
-                bcs     :get_13_16_rep
+                bcs     _get_13_16_rep
                 asl
-                bcs     :get_9_bits
+                bcs     _get_9_bits
 
-:get_5_bits     dex                             ; X=$FF
-:get_13_bits    asl
+_get_5_bits     dex                             ; X=$FF
+_get_13_bits    asl
                 php
-                jsr     :get_nibble
+                jsr     _get_nibble
                 plp
                 rol                             ; Shift into position, clr C.
                 eor     #$E1
                 cpx     #$00                    ; X=$FF for a 5-bit offset.
-                bne     :set_offset
+                bne     _set_offset
                 sbc     #2                      ; 13-bit offset from $FE00.
-                bne     :set_hi_8               ; Always NZ from previous SBC.
+                bne     _set_hi_8               ; Always NZ from previous SBC.
 
-:get_9_bits     dex                             ; X=$FF if CS, X=$FE if CC.
+_get_9_bits     dex                             ; X=$FF if CS, X=$FE if CC.
                 asl
-                bcc     :get_lo_8
+                bcc     _get_lo_8
                 dex
-                bcs     :get_lo_8               ; Always VS from previous BIT.
+                bcs     _get_lo_8               ; Always VS from previous BIT.
 
-:get_13_16_rep  asl
-                bcc     :get_13_bits            ; Shares code with 5-bit path.
+_get_13_16_rep  asl
+                bcc     _get_13_bits            ; Shares code with 5-bit path.
 
-:get_16_rep     bmi     :lz_length              ; Repeat previous offset.
+_get_16_rep     bmi     _lz_length              ; Repeat previous offset.
 
-:get_16_bits    jsr     readbyte                ; Get hi-byte of offset.
+_get_16_bits    jsr     readbyte                ; Get hi-byte of offset.
 
-:set_hi_8       tax
+_set_hi_8       tax
 
-:get_lo_8 
+_get_lo_8
                 jsr     readbyte                ; Get lo-byte of offset.
 
-:set_offset     stx     <lzsa_offset+1        ; Save new offset.
-                sta     <lzsa_offset+0
+_set_offset     stx     lzsa_offset+1           ; Save new offset.
+                sta     lzsa_offset+0
 
-:lz_length      ldx     #$00                    ; Hi-byte of length.
+_lz_length      ldx     #$00                    ; Hi-byte of length.
 
-                lda     <lzsa_cmdbuf
+                lda     lzsa_cmdbuf
                 and     #$07
                 clc
                 adc     #$02
                 cmp     #$09                    ; Extended length?
-                bcc     :got_lz_len
+                bcc     _got_lz_len
 
-                jsr     :get_length             ; X=0 for match, returns CC.
+                jsr     _get_length             ; X=0 for match, returns CC.
 
-:got_lz_len     eor     #$FF                    ; Negate the lo-byte of length
+_got_lz_len     eor     #$FF                    ; Negate the lo-byte of length
                 tay                             ; and check for zero.
                 iny
-                beq     :get_lz_win
+                beq     _get_lz_win
                 inx                             ; Increment # of pages to copy.
-:get_lz_win     
+_get_lz_win
 				phx
 				phy
 				jsr 	get_write_address
@@ -199,13 +198,13 @@ lzsa2_unpack    ldx     #$00                    ; Hi-byte of length or offset.
 
 				ply
 				plx
-:lz_page        
+_lz_page
 				jsr 	readbyte
 				jsr		writebyte
                 iny
-                bne     :lz_page
+                bne     _lz_page
                 dex                             ; Any full pages left to copy?
-                bne     :lz_page
+                bne     _lz_page
 
 				lda lzsa_srcptr
 				ldx lzsa_srcptr+1
@@ -215,38 +214,38 @@ lzsa2_unpack    ldx     #$00                    ; Hi-byte of length or offset.
 				ldy #0
 				ldx #0
 
-                jmp     :cp_length              ; Loop around to the beginning.
+                jmp     _cp_length              ; Loop around to the beginning.
 
                 ;
                 ; Lookup tables to differentiate literal and match lengths.
                 ;
 
-:nibl_len_tbl   db   9                       ; 2+7 (for match).
-                db   3                       ; 0+3 (for literal).
+_nibl_len_tbl   .byte   9                       ; 2+7 (for match).
+                .byte   3                       ; 0+3 (for literal).
 
-:byte_len_tbl   db   24-1                  ; 2+7+15 - CS (for match).
-                db   18-1                  ; 0+3+15 - CS (for literal).
+_byte_len_tbl   .byte   24-1                    ; 2+7+15 - CS (for match).
+                .byte   18-1                    ; 0+3+15 - CS (for literal).
 
                 ;
                 ; Get 16-bit length in X:A register pair, return with CC.
                 ;
 
-:get_length     jsr     :get_nibble
+_get_length     jsr     _get_nibble
                 cmp     #$0F                    ; Extended length?
-                bcs     :byte_length
-                adc     :nibl_len_tbl,x         ; Always CC from previous CMP.
+                bcs     _byte_length
+                adc     _nibl_len_tbl,x         ; Always CC from previous CMP.
 
-:got_length     ldx     #$00                    ; Set hi-byte of 4 & 8 bit
+_got_length     ldx     #$00                    ; Set hi-byte of 4 & 8 bit
                 rts                             ; lengths.
 
-:byte_length    php
+_byte_length    php
 				jsr     readbyte                ; So rare, this can be slow!
 				plp
-                adc     :byte_len_tbl,x         ; Always CS from previous CMP.
-                bcc     :got_length
-                beq     :finished
+                adc     _byte_len_tbl,x         ; Always CS from previous CMP.
+                bcc     _got_length
+                beq     _finished
 
-:word_length    jsr     readbyte                ; So rare, this can be slow!
+_word_length    jsr     readbyte                ; So rare, this can be slow!
                 pha
                 jsr     readbyte                ; So rare, this can be slow!
                 tax
@@ -254,7 +253,7 @@ lzsa2_unpack    ldx     #$00                    ; Hi-byte of length or offset.
                 clc                             ; MUST return CC!
                 rts
 
-:finished       pla                             ; Decompression completed, pop
+_finished       pla                             ; Decompression completed, pop
                 pla                             ; return address.
                 rts
 
@@ -262,21 +261,20 @@ lzsa2_unpack    ldx     #$00                    ; Hi-byte of length or offset.
                 ; Get a nibble value from compressed data in A.
                 ;
 
-:get_nibble     lsr     <lzsa_nibflg            ; Is there a nibble waiting?
-                lda     <lzsa_nibble            ; Extract the lo-nibble.
-                bcs     :got_nibble
+_get_nibble     lsr     lzsa_nibflg             ; Is there a nibble waiting?
+                lda     lzsa_nibble             ; Extract the lo-nibble.
+                bcs     _got_nibble
 
-                inc     <lzsa_nibflg            ; Reset the flag.
+                inc     lzsa_nibflg             ; Reset the flag.
 
                 jsr     readbyte
 
-:set_nibble     sta     <lzsa_nibble            ; Preserve for next time.
+_set_nibble     sta     lzsa_nibble             ; Preserve for next time.
                 lsr                             ; Extract the hi-nibble.
                 lsr
                 lsr
                 lsr
 
-:got_nibble     and     #$0F
+_got_nibble     and     #$0F
                 rts
-
 

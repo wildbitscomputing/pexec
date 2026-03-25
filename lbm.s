@@ -2,32 +2,31 @@
 ; 65c02 Foenix LBM file format parser utils
 ; for F256 Jr
 ;
-		mx %11
 
 ; error codes
-		dum $0
-lbm_no_error         ds 1   ; 0 = no error
-lbm_error_notlbm     ds 1   ; 1 = not an LBM file
-lbm_error_notpbm     ds 1   ; 2 = not an LBM with 8 bit packed pixels
-lbm_error_noclut     ds 1   ; 3 = There's no CLUT in this file
-lbm_error_nopixels   ds 1   ; 4 = There are no PIXL in this file
-		dend
+		.virtual $0
+lbm_no_error         .fill 1   ; 0 = no error
+lbm_error_notlbm     .fill 1   ; 1 = not an LBM file
+lbm_error_notpbm     .fill 1   ; 2 = not an LBM with 8 bit packed pixels
+lbm_error_noclut     .fill 1   ; 3 = There's no CLUT in this file
+lbm_error_nopixels   .fill 1   ; 4 = There are no PIXL in this file
+		.endv
 
 
-		dum $F0
-lbm_ChunkLength ds 0
-lbm_FileLength ds 0
-lbm_pChunk     ds 0
-lbm_temp0      ds 4
+		.virtual $F0
+lbm_ChunkLength
+lbm_FileLength
+lbm_pChunk
+lbm_temp0      .fill 4
 
-lbm_pTag       ds 0
-lbm_temp1      ds 2
+lbm_pTag
+lbm_temp1      .fill 2
 
-lbm_FileStart  ds 3
-lbm_Width      ds 2
-lbm_Height     ds 2
-lbm_EOF        ds 3
-		dend
+lbm_FileStart  .fill 3
+lbm_Width      .fill 2
+lbm_Height     .fill 2
+lbm_EOF        .fill 3
+		.endv
 
 ;------------------------------------------------------------------------------
 ;
@@ -44,9 +43,9 @@ lbm_EOF        ds 3
 ;
 lbm_decompress_clut
 		jsr lbm_init
-		bcc :good
+		bcc _good
 		rts				; error, error code in A
-:good
+_good
 		lda #<CHNK_CMAP
 		ldx #>CHNK_CMAP
 		jsr lbm_FindChunk
@@ -58,16 +57,16 @@ lbm_decompress_clut
 		; Check for nullptr
 		ora lbm_pChunk+1
 		ora lbm_pChunk+2
-		bne :got_pal
+		bne _got_pal
 
 		sec
 		lda #lbm_error_noclut
 		rts
 
-:got_pal
+_got_pal
 
 		ldx #0
-]lp		jsr readbyte  ; r
+_lp		jsr readbyte  ; r
 		sta lbm_temp0
 		jsr readbyte  ; g
 		sta lbm_temp0+1
@@ -82,7 +81,7 @@ lbm_decompress_clut
 		lda #$FF
 		jsr writebyte  ; a
 		dex
-		bne ]lp
+		bne _lp
 
 		clc
 		lda #lbm_no_error
@@ -101,9 +100,9 @@ lbm_decompress_clut
 ;
 lbm_decompress_pixels
 		jsr lbm_init
-		bcc :good
+		bcc _good
 		rts				; error, error code in A
-:good
+_good
 		lda #<CHNK_BODY
 		ldx #>CHNK_BODY
 		jsr lbm_FindChunk
@@ -115,88 +114,87 @@ lbm_decompress_pixels
 		; Check for nullptr
 		ora lbm_pChunk+1
 		ora lbm_pChunk+2
-		bne :got_body
+		bne _got_body
 
 		sec
 		lda #lbm_error_nopixels
 		rts
 
-:got_body
+_got_body
 
-:width = lbm_temp0
-:height = lbm_temp0+2
+_width = lbm_temp0
+_height = lbm_temp0+2
 
-		stz :height
-		stz :height+1
+		stz _height
+		stz _height+1
 
-]height_loop
-		stz :width
-		stz :width+1
+_height_loop
+		stz _width
+		stz _width+1
 
-]width_loop
+_width_loop
 
 		jsr readbyte
 		tax
-		bpl :copy
+		bpl _copy
 		; rle
 		eor #$FF
-		inc
+		inc a
 		tax
 		jsr readbyte
-]rle	jsr writebyte
-		inc :width
-		bne :nx
-		inc :width+1
-:nx
+_rle	jsr writebyte
+		inc _width
+		bne _nx
+		inc _width+1
+_nx
 		dex
-		bpl ]rle
+		bpl _rle
 
-:wid_height
-		lda :width+1
+_wid_height
+		lda _width+1
 		cmp lbm_Width+1
-		bne ]width_loop
-		lda :width
+		bne _width_loop
+		lda _width
 		cmp lbm_Width
-		bne ]width_loop
+		bne _width_loop
 
-		inc :height
-		bne :nh
-		inc :height+1
-:nh
+		inc _height
+		bne _nh
+		inc _height+1
+_nh
 
-
-		lda :height+1
+		lda _height+1
 		cmp lbm_Height+1
-		bne ]height_loop
-		lda :height
+		bne _height_loop
+		lda _height
 		cmp lbm_Height
-		bne ]height_loop
+		bne _height_loop
 
 		clc
 		lda #0
 		rts
 
-:copy
+_copy
 		jsr readbyte
 		jsr writebyte
 
-		inc :width
-		bne :nx2
-		inc :width+1
-:nx2
+		inc _width
+		bne _nx2
+		inc _width+1
+_nx2
 		dex
-		bpl :copy
+		bpl _copy
 
-		bra :wid_height
+		bra _wid_height
 
 ;------------------------------------------------------------------------------
 
 
-CHNK_FORM asc 'FORM'
-CHNK_PBM  asc 'PBM '
-CHNK_BMHD asc 'BMHD'
-CHNK_CMAP asc 'CMAP'
-CHNK_BODY asc 'BODY'
+CHNK_FORM .text "FORM"
+CHNK_PBM  .text "PBM "
+CHNK_BMHD .text "BMHD"
+CHNK_CMAP .text "CMAP"
+CHNK_BODY .text "BODY"
 
 ;------------------------------------------------------------------------------
 
@@ -211,10 +209,10 @@ lbm_init
 		lda #<CHNK_FORM
 		ldx #>CHNK_FORM
 		jsr lbm_CheckTag
-		bcc :good
+		bcc _good
 		lda #lbm_error_notlbm
 		rts
-:good
+_good
 		jsr lbm_chnklen
 
 		jsr get_read_address
@@ -233,15 +231,15 @@ lbm_init
 		lda #<CHNK_PBM
 		ldx #>CHNK_PBM
 		jsr lbm_CheckTag
-		bcc :pbm
-:not_pbm
+		bcc _pbm
+_not_pbm
 		lda #lbm_error_notpbm
 		rts
-:pbm
+_pbm
 		lda #<CHNK_BMHD
 		ldx #>CHNK_BMHD
 		jsr lbm_CheckTag
-		bcs :not_pbm
+		bcs _not_pbm
 
 		jsr lbm_chnklen
 		jsr lbm_nextchunk_address ; pChunk will hold next chunk address
@@ -301,15 +299,15 @@ lbm_CheckTag2
 ;		jsr TermCR
 
 		ldy #3
-]lp		lda (lbm_pTag),y
+_lp		lda (lbm_pTag),y
 		cmp lbm_temp0,y
-		bne :error
+		bne _error
 		dey
-		bpl ]lp
+		bpl _lp
 		clc
 		rts
 
-:error
+_error
 		sec
 		rts
 
@@ -325,16 +323,16 @@ lbm_chnklen
 		sta lbm_ChunkLength+0
 
 		bit #1
-		beq :even
+		beq _even
 
 		; EA I hate you
 		inc lbm_ChunkLength+0
-		bne :done
+		bne _done
 		inc lbm_ChunkLength+1
-		bne :done
+		bne _done
 		inc lbm_ChunkLength+2
-:even
-:done
+_even
+_done
 		rts
 
 ;------------------------------------------------------------------------------
@@ -362,27 +360,27 @@ lbm_FindChunk
 		sta lbm_pTag
 		stx lbm_pTag+1
 
-]loop
+_loop
 		jsr get_read_address
 
 		cpy lbm_EOF+2
-		bcc :continue
-		bne :nullptr
+		bcc _continue
+		bne _nullptr
         cpx lbm_EOF+1
-		bcc :continue
-		bne :nullptr
+		bcc _continue
+		bne _nullptr
         cmp lbm_EOF
-		bcs :nullptr
-:continue
+		bcs _nullptr
+_continue
 		jsr lbm_CheckTag2
 		php
 		jsr lbm_chnklen
 		plp
-		bcs :not_found
+		bcs _not_found
 
 		jsr get_read_address
 		rts				 ; found it
-:not_found
+_not_found
 		jsr lbm_nextchunk_address
 
 		;jsr get_read_address
@@ -404,12 +402,11 @@ lbm_FindChunk
 
 		jsr set_read_address
 
-		bra ]loop
+		bra _loop
 
-:nullptr
+_nullptr
 		lda #0
 		tax
 		tay
 		rts
 ;------------------------------------------------------------------------------
-

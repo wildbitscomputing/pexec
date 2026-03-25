@@ -1,7 +1,6 @@
 ;
 ; mmu helper module
 ;
-		mx %11
 
 ; Don't try to use $E000, or $0000
 ; for either of these block ranges
@@ -10,27 +9,27 @@
 
 READ_BLOCK  = $8000
 WRITE_BLOCK = $6000
-READ_MMU  = mmu+{READ_BLOCK/8192}
-WRITE_MMU = mmu+{WRITE_BLOCK/8192}
+READ_MMU  = mmu+READ_BLOCK/8192
+WRITE_MMU = mmu+WRITE_BLOCK/8192
 
 
 ; Zero Page defines
-mmu_ctrl equ 0
-io_ctrl  equ 1
+mmu_ctrl = 0
+io_ctrl  = 1
 ; reserved addresses 2-7 for future expansion, use at your own peril
-mmu      equ 8
-mmu0     equ 8
-mmu1     equ 9
-mmu2     equ 10
-mmu3     equ 11
-mmu4     equ 12
-mmu5     equ 13
-mmu6     equ 14
-mmu7     equ 15
+mmu      = 8
+mmu0     = 8
+mmu1     = 9
+mmu2     = 10
+mmu3     = 11
+mmu4     = 12
+mmu5     = 13
+mmu6     = 14
+mmu7     = 15
 
 ; System Bus Pointer's
-pSource  equ $10
-pDest    equ pSource+2
+pSource  = $10
+pDest    = pSource+2
 old_mmu_ctrl = pDest+2
 old_io_ctrl = old_mmu_ctrl+1
 old_mmu0 = old_io_ctrl+1
@@ -58,10 +57,10 @@ mmu_unlock
 		sta mmu_ctrl
 
 		ldx #7
-]save	lda mmu0,x
+_save	lda mmu0,x
 		sta old_mmu0,x
 		dex
-		bpl ]save
+		bpl _save
 
 		rts
 
@@ -70,10 +69,10 @@ mmu_unlock
 ;
 mmu_lock
 		ldx #7
-]fix	lda old_mmu0,x
+_fix	lda old_mmu0,x
 		sta mmu0,x
 		dex
-		bpl ]fix
+		bpl _fix
 
 		lda old_io_ctrl
 		sta io_ctrl
@@ -128,16 +127,16 @@ get_read_address
 		lsr
 		ror temp0
 		tay
-		
+
 		lda pSource+1
 		and #$1F
 		ora temp0
-		
+
 		tax
-		
+
 		lda pSource
 		rts
-		
+
 ;------------------------------------------------------------------------------
 ; Return the current system bus writing address
 ;  A = LOW
@@ -154,16 +153,16 @@ get_write_address
 		lsr
 		ror temp0
 		tay
-		
+
 		lda pDest+1
 		and #$1F
 		ora temp0
-		
+
 		tax
-		
+
 		lda pDest
 		rts
-		
+
 
 ; Set system bus address for writing
 ;
@@ -202,18 +201,18 @@ set_write_address
 readbyte
 		lda (pSource)
 		inc pSource
-		bne :done
+		bne _done
 		phx
 		ldx pSource+1
 		inx
-		cpx #>READ_BLOCK+$2000
-		bcc :no_wrap
+		cpx #>(READ_BLOCK+$2000)
+		bcc _no_wrap
 		inc READ_MMU		; next mmu 8k block
 		ldx #>READ_BLOCK	; next read needs to wrap to next block
-:no_wrap
+_no_wrap
 		stx pSource+1
 		plx
-:done
+_done
 		rts
 
 ;
@@ -223,54 +222,54 @@ readbyte
 writebyte
 		sta (pDest)
 		inc pDest
-		bne :done
+		bne _done
 		phx
 		ldx pDest+1
 		inx
-		cpx #>WRITE_BLOCK+$2000
-		bcc :no_wrap
+		cpx #>(WRITE_BLOCK+$2000)
+		bcc _no_wrap
 		inc WRITE_MMU  		; next mmu 8k block
 		ldx #>WRITE_BLOCK   ; next write needs to wrap to next block
-:no_wrap
+_no_wrap
 		stx pDest+1
 		plx
-:done
+_done
 		rts
 
 
-; 
+;
 ; Determine how many bytes it's possible to write into the write window, max 128
 ;
 bytes_can_write
 		lda	pDest+1
-		cmp	#>WRITE_BLOCK+$1F00
-		bne	:use_128
+		cmp	#>(WRITE_BLOCK+$1F00)
+		bne	_use_128
 		lda	pDest
-		bpl	:use_128	; A (pointer) is less than 128, there's room for yet another 128 bytes
+		bpl	_use_128	; A (pointer) is less than 128, there's room for yet another 128 bytes
 		; Subtract A from 256, in 8 bit two's complement this is the same as negate
 		eor	#$FF
 		clc
 		adc	#1
 		rts
-:use_128
+_use_128
 		lda	#128
 		rts
 
-; 
+;
 ; Increment pDest by A
 ;
 increment_dest
 		clc
 		adc	pDest
 		sta	pDest
-		bcc	:done
+		bcc	_done
 		lda	pDest+1
-		inc
-		cmp #>WRITE_BLOCK+$2000
-		bne	:no_wrap
+		inc a
+		cmp #>(WRITE_BLOCK+$2000)
+		bne	_no_wrap
 		inc	WRITE_MMU
 		lda	#>WRITE_BLOCK
-:no_wrap
+_no_wrap
 		sta	pDest+1
-:done
+_done
 		rts

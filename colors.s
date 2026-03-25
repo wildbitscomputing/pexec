@@ -20,23 +20,23 @@ initColors
 
 		stz io_ctrl
 
-		ldx #{16*4}-1       ; 16 colors
-]lp
-		lda |gs_colors,x
-		sta |VKY_TXT_FGLUT,x
-		sta |VKY_TXT_BGLUT,x
+		ldx #16*4-1       ; 16 colors
+_lp1
+		lda gs_colors,x
+		sta VKY_TXT_FGLUT,x
+		sta VKY_TXT_BGLUT,x
 		dex
-		bpl ]lp
+		bpl _lp1
 
 		; Set the background color, and the border color
 
 		ldx #2
-]lp
-		lda |gs_colors+{4*2},x ; Dark Blue index 2
-		sta |VKY_BKG_COL_B,x
-		sta |VKY_BRDR_COL_B,x
+_lp2
+		lda gs_colors+4*2,x ; Dark Blue index 2
+		sta VKY_BKG_COL_B,x
+		sta VKY_BRDR_COL_B,x
 		dex
-		bpl ]lp
+		bpl _lp2
 
 		pla
 		sta io_ctrl
@@ -44,47 +44,46 @@ initColors
 		rts
 ;------------------------------------------------------------------------------
 gs_colors
-	adrl $ff000000  ;0 Black
-	adrl $ffdd0033	;1 Deep Red
-	adrl $ff000099	;2 Dark Blue
-	adrl $ffdd22dd	;3 Purple
-	adrl $ff007722	;4 Dark Green
-	adrl $ff555555	;5 Dark Gray
-	adrl $ff2222ff	;6 Medium Blue
-	adrl $ff66aaff	;7 Light Blue
-	adrl $ff885500	;8 Brown
-	adrl $ffff6600	;9 Orange
-	adrl $ffaaaaaa	;A Light Gray
-	adrl $ffff9988	;B Pink
-	adrl $ff00dd00	;C Light Green
-	adrl $ffffff00	;D Yellow
-	adrl $ff55ff99	;E Aquamarine
-	adrl $ffffffff	;F White
+	.dword $ff000000  ;0 Black
+	.dword $ffdd0033  ;1 Deep Red
+	.dword $ff000099  ;2 Dark Blue
+	.dword $ffdd22dd  ;3 Purple
+	.dword $ff007722  ;4 Dark Green
+	.dword $ff555555  ;5 Dark Gray
+	.dword $ff2222ff  ;6 Medium Blue
+	.dword $ff66aaff  ;7 Light Blue
+	.dword $ff885500  ;8 Brown
+	.dword $ffff6600  ;9 Orange
+	.dword $ffaaaaaa  ;A Light Gray
+	.dword $ffff9988  ;B Pink
+	.dword $ff00dd00  ;C Light Green
+	.dword $ffffff00  ;D Yellow
+	.dword $ff55ff99  ;E Aquamarine
+	.dword $ffffffff  ;F White
 
 ;------------------------------------------------------------------------------
 ;
 ; Micro Kernel uses these colors, but Super BASIC does not, and the
 ; DOS shell does not, so I'm not going to either
 ;
-			do 0
+			.if 0
 _palette
-            adrl  $ff000000
-			adrl  $ffffffff
-			adrl  $ff880000
-			adrl  $ffaaffee
-			adrl  $ffcc44cc
-			adrl  $ff00cc55
-			adrl  $ff0000aa
-			adrl  $ffdddd77
-			adrl  $ffdd8855
-			adrl  $ff664400
-			adrl  $ffff7777
-			adrl  $ff333333
-			adrl  $ff777777
-			adrl  $ffaaff66
-			adrl  $ff0088ff
-			adrl  $ffbbbbbb
-			fin
+            .dword  $ff000000
+			.dword  $ffffffff
+			.dword  $ff880000
+			.dword  $ffaaffee
+			.dword  $ffcc44cc
+			.dword  $ff00cc55
+			.dword  $ff0000aa
+			.dword  $ffdddd77
+			.dword  $ffdd8855
+			.dword  $ff664400
+			.dword  $ffff7777
+			.dword  $ff333333
+			.dword  $ff777777
+			.dword  $ffaaff66
+			.dword  $ff0088ff
+			.dword  $ffbbbbbb
+			.endif
 
 ;------------------------------------------------------------------------------
-

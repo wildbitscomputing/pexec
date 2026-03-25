@@ -1,43 +1,41 @@
 ;
-; Glyphs, custom glphs to make pexec pretty
+; Glyphs, custom glyphs to make pexec pretty
 ;
 ;------------------------------------------------------------------------------
 
-	mx %11
+	.virtual 1
 
-	dum 1
+G_SPACE .fill 1
 
-G_SPACE ds 1
+GC .fill 1
+GE .fill 1
+GO .fill 1
+GP .fill 1
+GR .fill 1
+GX .fill 1
 
-GC ds 1
-GE ds 1
-GO ds 1
-GP ds 1
-GR ds 1
-GX ds 1
-
-GRUN0 ds 1
-GRUN1 ds 1
-GRUN2 ds 1
-GRUN3 ds 1
-	dend
+GRUN0 .fill 1
+GRUN1 .fill 1
+GRUN2 .fill 1
+GRUN3 .fill 1
+	.endv
 
 ;------------------------------------------------------------------------------
 glyph_puts
 
-:pString = term_temp2
+_pString = term_temp2
 
-	sta :pString
-	stx :pString+1
+	sta _pString
+	stx _pString+1
 
-]lp	lda (:pString)
-	beq :done
+_lp	lda (_pString)
+	beq _done
 	jsr glyph_draw
-	inc :pString
-	bne ]lp
-	inc :pString+1
-	bra ]lp
-:done
+	inc _pString
+	bne _lp
+	inc _pString+1
+	bra _lp
+_done
 	rts
 
 ;------------------------------------------------------------------------------
@@ -61,10 +59,10 @@ glyph_draw
 	; c = 0
 	ldy #7
 
-]lp lda glyphs-8,x ;-8 because 0 is terminator
+_lp lda glyphs-8,x ;-8 because 0 is terminator
 	phy
 	phx
-	jsr :emit_line
+	jsr _emit_line
 	plx
 	ply
 
@@ -78,7 +76,7 @@ glyph_draw
 
 	inx
 	dey
-	bpl ]lp
+	bpl _lp
 
 	plx
 	stx term_y
@@ -100,22 +98,22 @@ glyph_draw
 
 	rts
 
-:emit_line
+_emit_line
 	ldy #0
-]lp
+_lp2
 	asl
 	tax
 	lda #' '    ; space
-	bcc :write
+	bcc _write
 
-	lda #$B5    ; square 
+	lda #$B5    ; square
 
-:write
+_write
 	sta (term_ptr),y
 	iny
 	cpy #8
 	txa
-	bcc ]lp
+	bcc _lp2
 
 	rts
 
@@ -124,119 +122,118 @@ glyph_draw
 glyphs
 
 space_glyph			; useful for "erase"
-	db %00000000
-	db %00000000
-	db %00000000
-	db %00000000
-	db %00000000
-	db %00000000
-	db %00000000
-	db %00000000
+	.byte %00000000
+	.byte %00000000
+	.byte %00000000
+	.byte %00000000
+	.byte %00000000
+	.byte %00000000
+	.byte %00000000
+	.byte %00000000
 
 
 c_glyph
-	db %01111100
-	db %11000110
-	db %11000000
-	db %11000000
-	db %11000000
-	db %11000110
-	db %01111100
-	db %00000000
+	.byte %01111100
+	.byte %11000110
+	.byte %11000000
+	.byte %11000000
+	.byte %11000000
+	.byte %11000110
+	.byte %01111100
+	.byte %00000000
 
 
 e_glyph
-	db %11111110
-	db %11000000
-	db %11000000
-	db %11111000
-	db %11000000
-	db %11000000
-	db %11111110
-	db %00000000
+	.byte %11111110
+	.byte %11000000
+	.byte %11000000
+	.byte %11111000
+	.byte %11000000
+	.byte %11000000
+	.byte %11111110
+	.byte %00000000
 
 o_glyph
-	db %01111100
-	db %11000110
-	db %11000110
-	db %11000110
-	db %11000110
-	db %11000110
-	db %01111100
-	db %00000000
+	.byte %01111100
+	.byte %11000110
+	.byte %11000110
+	.byte %11000110
+	.byte %11000110
+	.byte %11000110
+	.byte %01111100
+	.byte %00000000
 
 
 p_glyph
-	db %11111100
-	db %11000110
-	db %11000110
-	db %11111100
-	db %11000000
-	db %11000000
-	db %11000000
-	db %00000000
+	.byte %11111100
+	.byte %11000110
+	.byte %11000110
+	.byte %11111100
+	.byte %11000000
+	.byte %11000000
+	.byte %11000000
+	.byte %00000000
 
 r_glyph
-	db %11111100
-	db %11000110
-	db %11000110
-	db %11111100
-	db %11011000
-	db %11001100
-	db %11000110
-	db %00000000
+	.byte %11111100
+	.byte %11000110
+	.byte %11000110
+	.byte %11111100
+	.byte %11011000
+	.byte %11001100
+	.byte %11000110
+	.byte %00000000
 
 
 x_glyph
-	db %11000110
-	db %01101100
-	db %00111000
-	db %00010000
-	db %00111000
-	db %01101100
-	db %11000110
-	db %00000000
+	.byte %11000110
+	.byte %01101100
+	.byte %00111000
+	.byte %00010000
+	.byte %00111000
+	.byte %01101100
+	.byte %11000110
+	.byte %00000000
 
 
 run0
-	db %00011000
-	db %00011000
-	db %00110000
-	db %00110000
-	db %00111000
-	db %01110000
-	db %00110000
-	db %00100000
+	.byte %00011000
+	.byte %00011000
+	.byte %00110000
+	.byte %00110000
+	.byte %00111000
+	.byte %01110000
+	.byte %00110000
+	.byte %00100000
 
 run1
-	db %00011000
-	db %00011000
-	db %00110000
-	db %00110000
-	db %00110000
-	db %00110000
-	db %00110000
-	db %00100000
+	.byte %00011000
+	.byte %00011000
+	.byte %00110000
+	.byte %00110000
+	.byte %00110000
+	.byte %00110000
+	.byte %00110000
+	.byte %00100000
 
 run2
-	db %00001100
-	db %00001100
-	db %00011000
-	db %00111000
-	db %00111100
-	db %00011100
-	db %00100100
-	db %00100000
+	.byte %00001100
+	.byte %00001100
+	.byte %00011000
+	.byte %00111000
+	.byte %00111100
+	.byte %00011100
+	.byte %00100100
+	.byte %00100000
 
 run3
-	db %00001100
-	db %00001100
-	db %00111000
-	db %01011110
-	db %00011000
-	db %00100100
-	db %01000100
-	db %00000100
+	.byte %00001100
+	.byte %00001100
+	.byte %00111000
+	.byte %01011110
+	.byte %00011000
+	.byte %00100100
+	.byte %01000100
+	.byte %00000100
 
 ;------------------------------------------------------------------------------
-

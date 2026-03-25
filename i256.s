@@ -4,33 +4,31 @@
 ;
 ; https://docs.google.com/document/d/10ovgMClDAJVgbW0sOhUsBkVABKWhOPM5Au7vbHJymoA/edit?usp=sharing
 ;
-		mx %11
-
 
 DEBUG_F256 = 0
 
 ; error codes
-		dum $0
-i256_no_error         ds 1   ; 0 = no error
-i256_error_badheader  ds 1   ; 1 = something is not good with the header
-i256_error_noclut     ds 1   ; 2 = There's no CLUT in this file
-i256_error_nopixels   ds 1   ; 3 = There are no PIXL in this file
-		dend
+		.virtual $0
+i256_no_error         .fill 1   ; 0 = no error
+i256_error_badheader  .fill 1   ; 1 = something is not good with the header
+i256_error_noclut     .fill 1   ; 2 = There's no CLUT in this file
+i256_error_nopixels   .fill 1   ; 3 = There are no PIXL in this file
+		.endv
 
-		dum $F0
-i256_FileLength ds 0
-i256_pChunk     ds 0
-i256_temp0      ds 4
+		.virtual $F0
+i256_FileLength
+i256_pChunk
+i256_temp0      .fill 4
 
-i256_blobCount  ds 0
-i256_colorCount ds 0
-i256_temp1      ds 2
+i256_blobCount
+i256_colorCount
+i256_temp1      .fill 2
 
-i256_FileStart  ds 3
-i256_Width      ds 2
-i256_Height     ds 2
-i256_EOF        ds 3
-		dend
+i256_FileStart  .fill 3
+i256_Width      .fill 2
+i256_Height     .fill 2
+i256_EOF        .fill 3
+		.endv
 
 ;
 ; This works with the mmu utils, and the lzsa2 decompressor
@@ -44,9 +42,9 @@ i256_EOF        ds 3
 ;
 decompress_clut
 		jsr c256init
-		bcs :error
+		bcs _error
 
-		do DEBUG_F256
+		.if DEBUG_F256
 		lda #<decompress_clut
 		ldx #>decompress_clut
 		jsr FindChunk
@@ -57,12 +55,12 @@ decompress_clut
 
 		ora i256_pChunk+1
 		ora i256_pChunk+2
-		beq :pass
+		beq _pass
 		lda #4
 		sec
 		rts
-:pass
-		fin
+_pass
+		.endif
 
 		lda #<CHNK_CLUT
 		ldx #>CHNK_CLUT
@@ -74,14 +72,14 @@ decompress_clut
 
 		ora i256_pChunk+1
 		ora i256_pChunk+2
-		bne :hasClut
+		bne _hasClut
 
 		lda #i256_error_noclut
 		sec
-:error
+_error
 		rts
 
-:hasClut
+_hasClut
 		; add 8 bytes, to skip up to color count
 		clc
 		lda i256_pChunk
@@ -104,11 +102,11 @@ decompress_clut
 		jsr readbyte
 		sta i256_colorCount+1
 		bit #$80
-		bne :compressed
+		bne _compressed
 
 		ldx i256_colorCount
 		tay  ; colorCount+1
-]raw
+_raw
 		; copy 1 color
 		jsr readbyte
 		jsr writebyte
@@ -119,17 +117,17 @@ decompress_clut
 		jsr readbyte
 		jsr writebyte
 		txa
-		bne :lo
+		bne _lo
 		dey
-		bmi :done
-:lo 	dex
-		bra ]raw
-:compressed
+		bmi _done
+_lo 	dex
+		bra _raw
+_compressed
 		and #$7F
 		sta i256_colorCount+1
 
 		jsr lzsa2_unpack
-:done
+_done
 		clc
 		lda #0
 		rts
@@ -147,8 +145,7 @@ decompress_clut
 ;
 decompress_pixels
 		jsr c256init
-		bcs :error
-:error
+		; bcs _error is a no-op (branches to next line) - original Merlin32 behavior
 		lda #<CHNK_PIXL
 		ldx #>CHNK_PIXL
 		jsr FindChunk
@@ -159,13 +156,13 @@ decompress_pixels
 
 		ora i256_pChunk+1
 		ora i256_pChunk+2
-		bne :hasPixel
+		bne _hasPixel
 
 		lda #i256_error_nopixels
 		sec
-:error
+_error
 		rts
-:hasPixel
+_hasPixel
 		; add 8 bytes, to skip up to color count
 		clc
 		lda i256_pChunk
@@ -189,33 +186,33 @@ decompress_pixels
 		jsr readbyte  	 		; really don't care about the high byte, it's there for 816
 		sta i256_blobCount+1
 
-:size = i256_temp0
-]loop
+_size = i256_temp0
+_loop
 		jsr readbyte
-		sta :size
+		sta _size
 		jsr readbyte
-		sta :size+1
-		ora :size
-		bne :compressed
+		sta _size+1
+		ora _size
+		bne _compressed
 
 		; Raw 64k Blob
 		ldx #0
 		ldy #0
-]lp
+_lp
 		jsr readbyte
 		jsr writebyte
 		dex
-		bne ]lp
+		bne _lp
 		dey
-		bne ]lp
-		bra :blob
+		bne _lp
+		bra _blob
 
-:compressed
+_compressed
 		jsr lzsa2_unpack
 
-:blob
+_blob
 		dec i256_blobCount
-		bne ]loop
+		bne _loop
 
 		clc
 		lda #0	; return no error
@@ -247,13 +244,13 @@ c256init
 		;jsr get_read_address
 
 		jsr c256ParseHeader
-		bcc :isGood
+		bcc _isGood
 
 		sec
 		lda #i256_error_badheader
 		rts
 
-:isGood
+_isGood
 		lda #<CHNK_CLUT
 		ldx #>CHNK_CLUT
 		jsr FindChunk
@@ -264,13 +261,13 @@ c256init
 
 		ora i256_pChunk+1
 		ora i256_pChunk+2
-		bne :hasClut
+		bne _hasClut
 
 		lda #i256_error_noclut
 		sec
 		rts
 
-:hasClut
+_hasClut
 		lda #<CHNK_PIXL
 		ldx #>CHNK_PIXL
 		jsr FindChunk
@@ -281,13 +278,13 @@ c256init
 
 		ora i256_pChunk+1
 		ora i256_pChunk+2
-		bne :hasPixels
+		bne _hasPixels
 
 		lda #i256_error_nopixels
 		sec
 		rts
 
-:hasPixels
+_hasPixels
 		clc
 		lda #i256_no_error
 		rts
@@ -302,108 +299,108 @@ c256init
 ;  Return: AXY pointer to chunk on memory bus
 ;
 FindChunk
-:pTag = i256_temp1
-:temp = i256_temp0
-		sta :pTag
-		stx :pTag+1
-		do DEBUG_F256
+_pTag = i256_temp1
+_temp = i256_temp0
+		sta _pTag
+		stx _pTag+1
+		.if DEBUG_F256
 		lda #<txt_FindChunk
 		ldx #>txt_FindChunk
 		jsr TermPUTS
-		fin
+		.endif
 		jsr get_read_address
 
 		phy
 		phx
 		pha
-]loop
-		do DEBUG_F256
+_loop
+		.if DEBUG_F256
 		jsr DebugTag
 		jsr DebugAXY
-		fin
+		.endif
 
 		phy
 		phx
 		pha
 
 		cpy i256_EOF+2
-		bcc :continue
-		bne :nullptr
+		bcc _continue
+		bne _nullptr
         cpx i256_EOF+1
-		bcc :continue
-		bne :nullptr
+		bcc _continue
+		bne _nullptr
         cmp i256_EOF
-		bcs :nullptr
+		bcs _nullptr
 
-:continue
+_continue
 		jsr set_read_address
 
 		jsr readbyte
-		sta :temp
+		sta _temp
 		jsr readbyte
-		sta :temp+1
+		sta _temp+1
 		jsr readbyte
-		sta :temp+2
+		sta _temp+2
 		jsr readbyte
-		sta :temp+3
+		sta _temp+3
 
 		ldy #3
-]lp     lda (:pTag),y
-		cmp :temp,y
-		bne :nextChunk
+_lp     lda (_pTag),y
+		cmp _temp,y
+		bne _nextChunk
 		dey
-		bpl ]lp
-		
+		bpl _lp
+
 		pla
 		plx
 		ply
-		sta :temp
-		stx :temp+1
-		sty :temp+2
+		sta _temp
+		stx _temp+1
+		sty _temp+2
 
 		pla
 		plx
 		ply
 		jsr set_read_address
 
-		lda :temp
-		ldx :temp+1
-		ldy :temp+2
+		lda _temp
+		ldx _temp+1
+		ldy _temp+2
 
 		rts
-:nextChunk
+_nextChunk
 
 		pla
 		plx
 		ply
-		sta :temp
-		stx :temp+1
-		sty :temp+2
+		sta _temp
+		stx _temp+1
+		sty _temp+2
 
 		jsr readbyte
 		clc
-		adc :temp
-		sta :temp
+		adc _temp
+		sta _temp
 		php
 		jsr readbyte
 		plp
-		adc :temp+1
-		sta :temp+1
+		adc _temp+1
+		sta _temp+1
 		php
 		jsr readbyte
 		plp
-		adc :temp+2
-		sta :temp+2
+		adc _temp+2
+		sta _temp+2
 		jsr readbyte  ; if throw away 4th byte
 
-		lda :temp
-		ldx :temp+1
-		ldy :temp+2
+		lda _temp
+		ldx _temp+1
+		ldy _temp+2
 		;jsr set_read_address
-		bra ]loop
+		bra _loop
 
 
-:nullptr
+_nullptr
 		pla
 		plx
 		ply
@@ -443,41 +440,41 @@ c256ParseHeader
 		lda #<CHNK_I256
 		ldx #>CHNK_I256
 		jsr IFF_Verify
-		bcs :BadHeader
+		bcs _BadHeader
 
         ; Copy out FileLength
 		ldx #0
-]lp		jsr readbyte
+_lp		jsr readbyte
 		sta i256_FileLength,x
 		inx
 		cpx #4
-		bcc ]lp
+		bcc _lp
 
         ; Compute the end of file address
         clc
-        lda <i256_FileStart
-        adc <i256_FileLength
-        sta <i256_EOF
+        lda i256_FileStart
+        adc i256_FileLength
+        sta i256_EOF
 
-        lda <i256_FileStart+1
-        adc <i256_FileLength+1
-        sta <i256_EOF+1
+        lda i256_FileStart+1
+        adc i256_FileLength+1
+        sta i256_EOF+1
 
-        lda <i256_FileStart+2
-        adc <i256_FileLength+2
-        sta <i256_EOF+2
-        bcs :BadHeader          ; overflow on memory address
+        lda i256_FileStart+2
+        adc i256_FileLength+2
+        sta i256_EOF+2
+        bcs _BadHeader          ; overflow on memory address
 
-		lda <i256_FileLength+3
-		bne :BadHeader
+		lda i256_FileLength+3
+		bne _BadHeader
 
         ; Look at the File Version
 		jsr readbyte
 		cmp #0  	    ; current
-		bne :BadHeader
+		bne _BadHeader
 		jsr readbyte
 		cmp #0
-		bne :BadHeader  ; currently only supports version 0
+		bne _BadHeader  ; currently only supports version 0
 
         ; Get the width and height
 		jsr readbyte
@@ -498,7 +495,7 @@ c256ParseHeader
 		clc
         rts
 
-:BadHeader
+_BadHeader
 		lda i256_FileStart
 		ldx i256_FileStart+1
 		ldy i256_FileStart+2
@@ -513,25 +510,25 @@ c256ParseHeader
 ; AX is pointer the IFF tag we want to compare
 ; Y is not preserved
 IFF_Verify
-:pIFF = i256_temp1
+_pIFF = i256_temp1
 		ldy #0
-		sta :pIFF
-		stx :pIFF+1
-]lp		jsr readbyte
-		cmp (:pIFF),y
-		bne :fail
+		sta _pIFF
+		stx _pIFF+1
+_lp		jsr readbyte
+		cmp (_pIFF),y
+		bne _fail
 		iny
 		cpy #4
-		bcc ]lp
+		bcc _lp
 		clc
 		rts
 
-:fail	
+_fail
 		sec
 		rts
 
 ;------------------------------------------------------------------------------
-		do DEBUG_F256
+		.if DEBUG_F256
 DebugAXY
 		pha
 		phx
@@ -551,19 +548,19 @@ DebugAXY
 		pla
 
 		rts
-		fin
+		.endif
 ;------------------------------------------------------------------------------
-		do DEBUG_F256
+		.if DEBUG_F256
 DebugTag
-:pTag = i256_temp1
+_pTag = i256_temp1
 		pha
 		phx
 		phy
 		lda #<txt_tag
 		ldx #>txt_tag
 		jsr TermPUTS
-		lda :pTag
-		ldx :pTag+1
+		lda _pTag
+		ldx _pTag+1
 		jsr TermPrintAXH
 		jsr TermCR
 
@@ -582,23 +579,23 @@ DebugTag
 		plx
 		pla
 		rts
-		fin
+		.endif
 
 ;------------------------------------------------------------------------------
 
 
-CHNK_CLUT asc 'CLUT'
-CHNK_PIXL asc 'PIXL'
-CHNK_I256 asc 'I256'
+CHNK_CLUT .text "CLUT"
+CHNK_PIXL .text "PIXL"
+CHNK_I256 .text "I256"
 
 
-		do DEBUG_F256
+		.if DEBUG_F256
 
-txt_tag asc 'tag='
-			db 0
-txt_FindChunk asc 'FindChunk - '
-			db 0
+txt_tag .text "tag="
+			.byte 0
+txt_FindChunk .text "FindChunk - "
+			.byte 0
 
-txt_eof asc 'EOF='
-			db 0
-		fin
+txt_eof .text "EOF="
+			.byte 0
+		.endif

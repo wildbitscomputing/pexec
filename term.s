@@ -1,24 +1,23 @@
 ;
 ; Terminal Module for Jr
 ;
-		mx %11
 
 TextBuffer = $C000
 
 ; Terminal Variables
-	dum $C0
-term_width  ds 1
-term_height ds 1
-term_x      ds 1
-term_y      ds 1
-term_ptr    ds 2
-term_temp0  ds 4
-term_temp1  ds 4
-term_temp2  ds 2
-	dend
+	.virtual $C0
+term_width  .fill 1
+term_height .fill 1
+term_x      .fill 1
+term_y      .fill 1
+term_ptr    .fill 2
+term_temp0  .fill 4
+term_temp1  .fill 4
+term_temp2  .fill 2
+	.endv
 
 ;TermCOUT       - COUT, prints character in A, right now only special character code #13 is supported <cr>
-;TermPUTS       - AX is a pointer to a 0 terminated string, this function will send the characters into COUT  
+;TermPUTS       - AX is a pointer to a 0 terminated string, this function will send the characters into COUT
 ;TermPrintAN    - print nybble value in A
 ;TermPrintAH    - print value in A, as HEX
 ;TermPrintAI    - print value in A, as DEC
@@ -66,86 +65,86 @@ TermCR  lda #13
 ;------------------------------------------------------------------------------
 TermCOUT
 		cmp #13
-		beq :cr
+		beq _cr
 
 		sta (term_ptr)
 		inc term_ptr
-		bne :skiphi
+		bne _skiphi
 		inc term_ptr+1
-:skiphi
+_skiphi
 		lda term_x
-		inc
+		inc a
 		cmp term_width
-		bcc :x
-:incy
+		bcc _x
+_incy
 		lda term_y
-		inc
+		inc a
 		cmp term_height
-		bcs :scroll_savexy
-:y      sta term_y
+		bcs _scroll_savexy
+_y      sta term_y
 
 		lda #0
-:x		sta term_x
+_x		sta term_x
 		rts
 
-:cr
+_cr
 		phy
 		phx
 		lda term_y
-		inc
+		inc a
 		cmp term_height
-		bcs :scroll
+		bcs _scroll
 		tay
 		ldx #0
 		jsr TermSetXY
 		plx
 		ply
 		rts
-:scroll_savexy
+_scroll_savexy
 		phy
 		phx
-:scroll
-:pSrc = term_temp0
-:pDst = term_temp0+2
+_scroll
+_pSrc = term_temp0
+_pDst = term_temp0+2
 
-		stz :pDst
+		stz _pDst
 		lda #80
-		sta :pSrc
+		sta _pSrc
 		lda #>TextBuffer
-		sta :pDst+1
-		sta :pSrc+1
+		sta _pDst+1
+		sta _pSrc+1
 
 		ldx term_height
 		dex
-]lp
+_lp
 		ldy #0
-]inlp
-		lda (:pSrc),y
-		sta (:pDst),y
+_inlp
+		lda (_pSrc),y
+		sta (_pDst),y
 		iny
 		cpy term_width
-		bcc ]inlp
+		bcc _inlp
 
 		clc
-		lda :pSrc
-		sta :pDst
+		lda _pSrc
+		sta _pDst
 		adc term_width
-		sta :pSrc
-		lda :pSrc+1
-		sta :pDst+1
+		sta _pSrc
+		lda _pSrc+1
+		sta _pDst+1
 		adc #0
-		sta :pSrc+1
+		sta _pSrc+1
 
 		dex
-		bne ]lp
+		bne _lp
 
 ; clear line
 		ldy #0
 		lda #' '
-]lclrp  sta (:pDst),y
+_lclrp  sta (_pDst),y
 		iny
 		cpy term_width
-		bcc ]lclrp
+		bcc _lclrp
 
 		ldx #0
 		ldy term_height
@@ -166,46 +165,46 @@ TermClearTextBuffer
 		sta io_ctrl         ; swap in the color memory
 		;lda $C000			; get current color attribute
 		lda #$F2	; white on blue
-		jsr	:clear
+		jsr	_clear
 
 ; We need a rainbow up top
 
 		ldx #79
-]cloop  lda #$12  			; red
-		sta $C000+{80*1},x
-		sta $C000+{80*51},x
+_cloop  lda #$12  			; red
+		sta $C000+80*1,x
+		sta $C000+80*51,x
 		lda #$92			; orange
-		sta $C000+{80*2},x
-		sta $C000+{80*52},x
+		sta $C000+80*2,x
+		sta $C000+80*52,x
 		lda #$D2			; yello
-		sta $C000+{80*3},x
-		sta $C000+{80*53},x
+		sta $C000+80*3,x
+		sta $C000+80*53,x
 		lda #$C2			; green
-		sta $C000+{80*4},x
-		sta $C000+{80*54},x
+		sta $C000+80*4,x
+		sta $C000+80*54,x
 		lda #$72			; bright blue
-		sta $C000+{80*5},x
-		sta $C000+{80*55},x
+		sta $C000+80*5,x
+		sta $C000+80*55,x
 		lda #$32		   	; purple
-		sta $C000+{80*6},x
-		sta $C000+{80*56},x
+		sta $C000+80*6,x
+		sta $C000+80*56,x
 		lda #$B2		  	; pink
-		sta $C000+{80*7},x
-		sta $C000+{80*57},x
+		sta $C000+80*7,x
+		sta $C000+80*57,x
 		lda #$A2		  	; grey
-		sta $C000+{80*8},x
-		sta $C000+{80*58},x
+		sta $C000+80*8,x
+		sta $C000+80*58,x
 		dex
-		bpl ]cloop
+		bpl _cloop
 
 		lda #2
 		sta io_ctrl         ; swap in the text memory
 		lda #' '
 
-:clear
+_clear
 		ldx #0
 
-]lp
+_lp
 		sta $C000,x
 		sta $C100,x
 		sta $C200,x
@@ -226,40 +225,36 @@ TermClearTextBuffer
 		sta $D100,x
 		sta $D200,x
 		dex
-		bne ]lp
+		bne _lp
 
 		rts
 
 ;------------------------------------------------------------------------------
 
 Term80Table_lo
-]var = TextBuffer
-		lup 60
-		db #<]var
-]var = ]var+80
-		--^
+	.for _n := 0, _n < 60, _n += 1
+	.byte <(TextBuffer + _n * 80)
+	.next
 
 Term80Table_hi
-]var = TextBuffer
-		lup 60
-		db #>]var
-]var = ]var+80
-		--^
+	.for _n := 0, _n < 60, _n += 1
+	.byte >(TextBuffer + _n * 80)
+	.next
 
 ;------------------------------------------------------------------------------
 TermPUTS
-:pString = term_temp2
-		sta :pString
-		stx :pString+1
+_pString = term_temp2
+		sta _pString
+		stx _pString+1
 
-]lp		lda (:pString)
-		beq :done
+_lp		lda (_pString)
+		beq _done
 		jsr TermCOUT
-		inc :pString
-		bne ]lp
-		inc :pString+1
-		bra ]lp
-:done
+		inc _pString
+		bne _lp
+		inc _pString+1
+		bra _lp
+_done
 		rts
 
 ;------------------------------------------------------------------------------
@@ -291,7 +286,7 @@ TermPrintAH
 		lda Term_chars,x
 		jmp TermCOUT
 
-Term_chars  ASC '0123456789ABCDEF'
+Term_chars  .text "0123456789ABCDEF"
 
 ;TermPrintAN    - print nybble value in A
 TermPrintAN
@@ -312,85 +307,85 @@ TermPrintAXH
 ;------------------------------------------------------------------------------
 ;TermPrintAI    - print value in A, as DEC
 TermPrintAI
-:bcd = term_temp1
+_bcd = term_temp1
 		jsr BINBCD8
-		lda :bcd+1
+		lda _bcd+1
 		and #$0F
-		beq :skip
+		beq _skip
 		jsr TermPrintAN
-		lda :bcd
+		lda _bcd
 		bra TermPrintAH
-:skip
-		lda :bcd
+_skip
+		lda _bcd
 		and #$F0
-		beq :single_digit
-		lda :bcd
+		beq _single_digit
+		lda _bcd
 		bra TermPrintAH
 
-:single_digit
-		lda :bcd
+_single_digit
+		lda _bcd
 		bra TermPrintAN
 		rts
 ;------------------------------------------------------------------------------
 ;TermPrintAXI   - print value in AX, as DEC
 TermPrintAXI
-:bcd = term_temp1
+_bcd = term_temp1
 		jsr BINBCD16
 
-		lda :bcd+2
+		lda _bcd+2
 		and #$0F
-		beq :skip1
+		beq _skip1
 
 		; 5 digits
 		jsr TermPrintAN
-:digit4
-		lda :bcd
-		ldx :bcd+1
+_digit4
+		lda _bcd
+		ldx _bcd+1
 		bra TermPrintAXH
-:skip1
-		lda :bcd+1
-		beq :skip2
+_skip1
+		lda _bcd+1
+		beq _skip2
 
 		and #$F0
-		bne :digit4
+		bne _digit4
 
-		lda :bcd+1
+		lda _bcd+1
 		jsr TermPrintAN  ; just the nybble
-		lda :bcd
+		lda _bcd
 		bra TermPrintAH
 
-:skip2
-		lda :bcd
+_skip2
+		lda _bcd
 		and #$F0
-		beq :single_digit
-		lda :bcd
+		beq _single_digit
+		lda _bcd
 		jmp TermPrintAH
 
-:single_digit
-		lda :bcd
+_single_digit
+		lda _bcd
 		bra TermPrintAN
 		rts
 ;------------------------------------------------------------------------------
 ; Andrew Jacobs, 28-Feb-2004
-BINBCD8	
-:bin = term_temp0
-:bcd = term_temp1
-		sta :bin
-		SED		; Switch to decimal mode
-		stz :bcd+0
-		stz :bcd+1
-		LDX #8		; The number of source bits
+BINBCD8
+_bin = term_temp0
+_bcd = term_temp1
+		sta _bin
+		sed		; Switch to decimal mode
+		stz _bcd+0
+		stz _bcd+1
+		ldx #8		; The number of source bits
 
-]CNVBIT	ASL :bin	; Shift out one bit
-		LDA :bcd+0	; And add into result
-		ADC :bcd+0
-		STA :bcd+0
-		LDA :bcd+1	; propagating any carry
-		ADC :bcd+1
-		STA :bcd+1
-		DEX		; And repeat for next bit
-		BNE ]CNVBIT
-		CLD		; Back to binary
+_CNVBIT	asl _bin	; Shift out one bit
+		lda _bcd+0	; And add into result
+		adc _bcd+0
+		sta _bcd+0
+		lda _bcd+1	; propagating any carry
+		adc _bcd+1
+		sta _bcd+1
+		dex		; And repeat for next bit
+		bne _CNVBIT
+		cld		; Back to binary
 		rts
 
 ; Convert an 16 bit binary value to BCD
@@ -405,32 +400,31 @@ BINBCD8
 ;
 ; Andrew Jacobs, 28-Feb-2004
 
-BINBCD16 
-:bin = term_temp0
-:bcd = term_temp1
-		sta :bin
-		stx :bin+1
+BINBCD16
+_bin = term_temp0
+_bcd = term_temp1
+		sta _bin
+		stx _bin+1
 
-		SED		; Switch to decimal mode
-		stz :bcd+0
-		stz :bcd+1
-		stz :bcd+2
-		LDX #16		; The number of source bits
+		sed		; Switch to decimal mode
+		stz _bcd+0
+		stz _bcd+1
+		stz _bcd+2
+		ldx #16		; The number of source bits
 
-]CNVBIT	ASL :bin+0	; Shift out one bit
-		ROL :bin+1
-		LDA :bcd+0	; And add into result
-		ADC :bcd+0
-		STA :bcd+0
-		LDA :bcd+1	; propagating any carry
-		ADC :bcd+1
-		STA :bcd+1
-		LDA :bcd+2	; ... thru whole result
-		ADC :bcd+2
-		STA :bcd+2
-		DEX		; And repeat for next bit
-		BNE ]CNVBIT
-		CLD		; Back to binary
+_CNVBIT	asl _bin+0	; Shift out one bit
+		rol _bin+1
+		lda _bcd+0	; And add into result
+		adc _bcd+0
+		sta _bcd+0
+		lda _bcd+1	; propagating any carry
+		adc _bcd+1
+		sta _bcd+1
+		lda _bcd+2	; ... thru whole result
+		adc _bcd+2
+		sta _bcd+2
+		dex		; And repeat for next bit
+		bne _CNVBIT
+		cld		; Back to binary
 
 		rts
-

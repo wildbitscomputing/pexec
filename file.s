@@ -1,20 +1,19 @@
 ;
 ;  File Abstraction Routines, since Kernel level stuff is all async
 ;
-		mx %11
 
 DEBUG_FILE = 0
 
-		dum $B0
-file_handle     ds 1
-file_bytes_req  ds 3
+		.virtual $B0
+file_handle     .fill 1
+file_bytes_req  .fill 3
 
-file_bytes_wrote ds 0
-file_bytes_read ds 3
+file_bytes_wrote
+file_bytes_read .fill 3
 
-file_to_read ds 1
-file_open_drive ds 1
-		dend
+file_to_read .fill 1
+file_open_drive .fill 1
+		.endv
 
 ;
 ; AX = pFileName (CString)
@@ -49,53 +48,53 @@ fcreate_open
 
 		; Set the Filename length (why?)
 		ldy #0
-]len    lda (kernel_args_file_open_fname),y
-		beq :got_len
+_len    lda (kernel_args_file_open_fname),y
+		beq _got_len
 		iny
-		bne ]len
-:got_len
+		bne _len
+_got_len
 		sty kernel_args_file_open_fname_len
 
-:try_again
+_try_again
 		jsr kernel_File_Open
 		sta file_handle
-		bcc :it_opened
-:error
+		bcc _it_opened
+_error
 		sec
 		rts
 
-:it_opened
+_it_opened
 		lda #<event_type
 		sta kernel_args_events
 		lda #>event_type
 		sta kernel_args_events+1
 
-]loop
+_loop
         jsr kernel_Yield    ; Not required; but good while waiting.
         jsr kernel_NextEvent
-        bcs ]loop
+        bcs _loop
 
 		lda event_type
 
-		do DEBUG_FILE
+		.if DEBUG_FILE
 		pha
 		jsr TermPrintAH
 		lda #'y'
 		jsr TermCOUT
 		pla
-		fin
+		.endif
 
 		;cmp #kernel_event_file_CLOSED  ; skip this event
-		;beq :error
+		;beq _error
         cmp #kernel_event_file_NOT_FOUND
-        beq :error
+        beq _error
 		cmp #kernel_event_file_OPENED
-		beq :success
+		beq _success
 		cmp #kernel_event_file_ERROR
-		beq :error
-		bra ]loop
+		beq _error
+		bra _loop
 
-:success
+_success
 		lda file_handle
 		clc
 		rts
@@ -112,7 +111,7 @@ fread
 		stx file_bytes_req+1
 		sty file_bytes_req+2
 
-		do DEBUG_FILE
+		.if DEBUG_FILE
 		jsr TermCR
 		lda file_bytes_req+2
 		jsr TermPrintAH
@@ -120,7 +119,7 @@ fread
 		ldx file_bytes_req+1
 		jsr TermPrintAXH
 		jsr TermCR
-		fin
+		.endif
 
 		stz file_bytes_read
 		stz file_bytes_read+1
@@ -136,34 +135,34 @@ fread
 		lda #>event_type
 		sta kernel_args_events+1
 
-]loop
+_loop
 		lda file_bytes_req+2
-		bne :do128  			  ; a lot of data left to read
-		lda file_bytes_req+1      
-		bne :do128
+		bne _do128  			  ; a lot of data left to read
+		lda file_bytes_req+1
+		bne _do128
 		lda file_bytes_req
-		bne	:not_done
-		jmp	:done_done
-:not_done
-		bpl :small_read
-:do128	
+		bne	_not_done
+		jmp	_done_done
+_not_done
+		bpl _small_read
+_do128
 		lda	#128
-:small_read
+_small_read
 		sta	file_to_read
 		jsr	bytes_can_write
 		cmp file_to_read
-		blt :read_len_ok
+		bcc _read_len_ok
 		lda file_to_read
-:read_len_ok
+_read_len_ok
 		sta kernel_args_file_read_buflen
 
-		do DEBUG_FILE
+		.if DEBUG_FILE
 		jsr TermCR
 		ldx #$EA
 		lda kernel_args_file_read_buflen
 		jsr TermPrintAXH
 		jsr TermCR
-		fin
+		.endif
 
 		; Set the stream
 		lda file_handle
@@ -172,42 +171,42 @@ fread
 		jsr kernel_File_Read
 
 	    ; wait for data to appear, or error, or EOF
-]event_loop
-		do DEBUG_FILE
+_event_loop
+		.if DEBUG_FILE
 		; make sure event output is still set
 		lda #<event_type
 		sta kernel_args_events
 		lda #>event_type
 		sta kernel_args_events+1
-		fin
+		.endif
 
         ;jsr kernel_Yield    ; Not required; but good while waiting.
         jsr kernel_NextEvent
-        bcs ]event_loop
+        bcs _event_loop
 
 		lda event_type
 
-		do DEBUG_FILE
+		.if DEBUG_FILE
 		pha
 		jsr TermPrintAH
 		lda #'x'
 		jsr TermCOUT
 		pla
-		fin
+		.endif
 
         cmp #kernel_event_file_EOF
-		beq :done_done
+		beq _done_done
         cmp #kernel_event_file_ERROR
-		beq :done_done
+		beq _done_done
 		cmp #kernel_event_file_DATA
-		bne ]event_loop
+		bne _event_loop
 
-		do DEBUG_FILE
+		.if DEBUG_FILE
 		jsr TermCR
 		lda event_file_data_read
 		jsr TermPrintAH
 		jsr TermCR
-		fin
+		.endif
 
 		; subtract bytes read from the total request
 		sec
@@ -225,7 +224,7 @@ fread
 		lda file_bytes_read
 		adc event_file_data_read
 		sta file_bytes_read
-		bcc :get_data
+		bcc _get_data
 ;-----------------------------------------------------------------------------
 ; LAME PROGRESS INDICATOR
 ;-----------------------------------------------------------------------------
@@ -234,21 +233,21 @@ fread
 
 ;-----------------------------------------------------------------------------
 		inc file_bytes_read+1
-		bne :get_data
+		bne _get_data
 		inc file_bytes_read+2
 
-:get_data
+_get_data
 		lda event_file_data_read
 		sta kernel_args_recv_buflen
 
-		do DEBUG_FILE
+		.if DEBUG_FILE
 		lda #<txt_data_read
 		ldx #>txt_data_read
 		jsr TermPUTS
 		lda event_file_data_read
 		jsr TermPrintAH
 		jsr TermCR
-		fin
+		.endif
 
 		lda	pDest
 		sta kernel_args_recv_buf
@@ -260,14 +259,14 @@ fread
 		lda kernel_args_recv_buflen
 		jsr increment_dest
 
-		do DEBUG_FILE				 
-		jmp ]loop
-		else
-		bra ]loop
-		fin
+		.if DEBUG_FILE
+		jmp _loop
+		.else
+		bra _loop
+		.endif
 
 
-:done_done
+_done_done
 		lda file_bytes_read
 		ldx file_bytes_read+1
 		ldy file_bytes_read+2
@@ -279,10 +278,10 @@ fclose
 		sta kernel_args_file_close_stream
 		jmp kernel_File_Close
 
-txt_data_read asc 'Data Read:'
-		db 0
+txt_data_read .text "Data Read:"
+		.byte 0
 
-	do 0
+	.if 0
 ;
 ; mmu read address is the address
 ; AXY - Num Bytes to write
@@ -305,20 +304,20 @@ fwrite
 		lda #>event_type
 		sta kernel_args_events+1
 
-]loop
+_loop
 		lda file_bytes_req+2
-		bne :do128  			  ; a lot of data left to write
-		lda file_bytes_req+1      
-		bne :do128
+		bne _do128  			  ; a lot of data left to write
+		lda file_bytes_req+1
+		bne _do128
 		lda file_bytes_req
 		cmp #128
-		bcc :small_read
-:do128	lda #128
-		bra :try128
-:small_read
+		bcc _small_read
+_do128	lda #128
+		bra _try128
+_small_read
 		lda file_bytes_req
-		beq :done_done  	   	; zero bytes left
-:try128
+		beq _done_done  	   	; zero bytes left
+_try128
 		sta kernel_args_file_write_buflen
 
 		; subtract request from the total request
@@ -333,7 +332,7 @@ fwrite
 		sbc #0
 		sta file_bytes_req+2
 
-		jsr :bytes_to_buffer
+		jsr _bytes_to_buffer
 
 		; Set the stream
 		lda file_handle
@@ -347,39 +346,39 @@ fwrite
 		jsr kernel_File_Write
 
 	    ; wait for data to appear, or error, or EOF
-]event_loop
+_event_loop
         jsr kernel_Yield    ; Not required; but good while waiting.
         jsr kernel_NextEvent
-        bcs ]event_loop
+        bcs _event_loop
 
-		do 0
+		.if 0
 		lda event_type
 		jsr TermPrintAH
-		fin
+		.endif
 
 		lda event_type
 
         cmp #kernel_event_file_EOF
-		beq :done_done
+		beq _done_done
         cmp #kernel_event_file_ERROR
-		beq :done_done
+		beq _done_done
 		cmp #kernel_event_file_WROTE
-		bne ]event_loop
+		bne _event_loop
 
-		do 0
+		.if 0
 		lda event_file_data_wrote
 		jsr TermPrintAH
-		fin
+		.endif
 
 		clc
 		lda file_bytes_wrote
 		adc event_file_data_wrote
 		sta file_bytes_wrote
-		bcc :show
+		bcc _show
 		inc file_bytes_wrote+1
-		bne :show
+		bne _show
 		inc file_bytes_wrote+2
-:show
+_show
 		ldx #0
 		ldy term_y
 		jsr TermSetXY
@@ -390,10 +389,10 @@ fwrite
 		ldx file_bytes_wrote+1
 		jsr TermPrintAXH
 
-		bra ]loop
+		bra _loop
 
 
-:done_done
+_done_done
 		lda file_bytes_wrote
 		ldx file_bytes_wrote+1
 		ldy file_bytes_wrote+2
@@ -403,9 +402,9 @@ fwrite
 ; Copy bytes from the file, into the io buffer
 ; before they are written out to disk
 ;
-:bytes_to_buffer
+_bytes_to_buffer
 		ldx #0
-]lp		jsr readbyte
+_lp		jsr readbyte
 
 		;pha
 		;phx
@@ -416,7 +415,7 @@ fwrite
 		sta file_buffer,x
 		inx
 		cpx kernel_args_file_write_buflen
-		bne ]lp
+		bne _lp
 		rts
 
-	fin
+	.endif
