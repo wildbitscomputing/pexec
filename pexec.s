@@ -144,6 +144,8 @@ _seems_good_args
 		stz progress
 		stz progress+1
 		stz show_prompt  ; default to show the press key prompt
+		stz chooser_chdir
+		stz chooser_chdir+1
 
 		; Terminal Init
 		jsr initColors	; default the color palette
@@ -151,6 +153,15 @@ _seems_good_args
 
 		; mmu help functions are alive
 		jsr mmu_unlock
+
+		; Ensure 80x60 text mode
+		php
+		sei
+		stz io_ctrl
+		stz $D001		; 80 column mode
+		lda #2
+		sta io_ctrl
+		plp
 
 		; Program Version
 		lda #<txt_version
@@ -160,7 +171,7 @@ _seems_good_args
 
 		; giant text test
 
-		ldx #16
+		ldx #18
 		ldy #1
 		jsr TermSetXY
 
@@ -169,7 +180,7 @@ _seems_good_args
 		jsr glyph_puts
 
 		; load stuff banner
-		ldx #16
+		ldx #17
 		ldy #8
 		jsr TermSetXY
 
@@ -178,6 +189,12 @@ _seems_good_args
 		jsr TermPUTS
 
 
+		lda	args_buflen
+		bne	_has_argument
+
+		jmp	chooser_init
+
+_has_argument
 		; Display what we're trying to do
 		ldx #0
 		ldy #10
@@ -187,16 +204,6 @@ _seems_good_args
 		ldx #>txt_launch
 		jsr TermPUTS
 
-		lda	args_buflen
-		bne	_has_argument
-
-		lda #<txt_no_argument
-		ldx #>txt_no_argument
-		jsr TermPUTS
-
-		jmp	wait_for_key
-
-_has_argument
 		; Display the arguments, hopefully there are some
 		lda	#'"'
 		jsr	TermCOUT
@@ -490,6 +497,31 @@ LoadPGX
 
 launchProgram
 		jsr fclose	; close PGX or PGZ
+
+		; Deferred chdir from chooser (after file is fully loaded/closed)
+		lda chooser_chdir
+		ora chooser_chdir+1
+		beq _no_chdir
+		lda chooser_chdir
+		sta kernel_args_buf
+		lda chooser_chdir+1
+		sta kernel_args_buf+1
+		; Calculate path length
+		ldy #0
+		lda (chooser_chdir),y
+_chdir_len
+		beq _chdir_go
+		iny
+		lda (chooser_chdir),y
+		bra _chdir_len
+_chdir_go
+		sty kernel_args_buflen
+		lda chooser_drive
+		sta kernel_args_directory_open_drive
+		jsr kernel_Chdir
+		stz chooser_chdir		; clear so it doesn't fire again
+		stz chooser_chdir+1
+_no_chdir
 
 		lda #5
 		sta old_mmu0+5	; when lock is called it will map $A000 to physcial $A000
@@ -954,7 +986,7 @@ _done_copy
 
 ;------------------------------------------------------------------------------
 ; Strings and other includes
-txt_version .text "Pexec 0.65"
+txt_version .text "Pexec 0.70"
 		.byte 13,13,0
 
 txt_press_key .byte 13
@@ -999,6 +1031,7 @@ txt_glyph_pexec
 		.byte GP,GE,GX,GE,GC,0
 
 ;------------------------------------------------------------------------------
+		.include "chooser.s"
 		.include "mmu.s"
 		.include "term.s"
 		.include "lbm.s"
