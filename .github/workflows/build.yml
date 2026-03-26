@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build 64tass from source
+        run: |
+          curl -L https://sourceforge.net/projects/tass64/files/source/64tass-1.60.3243-src.zip/download -o 64tass-src.zip
+          unzip 64tass-src.zip
+          cd 64tass-1.60*
+          make -j$(nproc)
+          sudo cp 64tass /usr/local/bin/
+
+      - name: Build pexec
+        run: make
+
+      - name: Verify binary size
+        run: |
+          SIZE=$(stat -c%s pexec.bin)
+          echo "Binary size: $SIZE bytes"
+          [ "$SIZE" -eq 8192 ] || (echo "ERROR: expected 8192 bytes" && exit 1)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pexec.bin
+          path: pexec.bin
