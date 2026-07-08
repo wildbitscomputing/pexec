@@ -672,6 +672,8 @@ _draw_bottom_border
         jsr TermCOUT
         lda #'>'
         jsr TermCOUT
+        lda #' '
+        jsr TermCOUT
         lda #<filter_str
         ldx #>filter_str
         jsr TermPUTS
@@ -1112,7 +1114,11 @@ _cl_not_bksp
 _cl_not_del
         cmp #KEY_BREAK
         bne _cl_not_break
+        lda filter_len
+        bne _cl_break_clear     ; searching: clear the filter, don't exit
         jmp mmu_lock
+_cl_break_clear
+        jmp _cl_filter_clear
 _cl_not_break
 
         ; Check ASCII
