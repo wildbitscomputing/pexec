@@ -42,6 +42,8 @@ KEY_ESC   = 27
 KEY_BKSP  = $92
 KEY_DEL   = $91
 KEY_BREAK = $BC            ; RUN/STOP key
+KEY_F3    = $83            ; F-keys arrive as raw $80+n
+KEY_HOME  = $B3
 
 PAGE_JUMP = 10             ; entries to skip with left/right
 
@@ -979,6 +981,10 @@ _kp_not_right
         ; Other keys stop repeat
         stz repeat_key
 
+        cmp #KEY_F3
+        bne _cl_not_f3
+        jmp _cl_toggle_oldos
+_cl_not_f3
         cmp #KEY_BKSP
         bne _cl_not_bksp
         jmp _chooser_parent_dir
@@ -1002,10 +1008,6 @@ _cl_not_break
 _cl_select
         jmp _chooser_select
 _cl_not_select
-        cmp #'o'
-        beq _cl_toggle_oldos
-        cmp #'O'
-        beq _cl_toggle_oldos
         jmp _cl_poll
 
 _cl_toggle_oldos
