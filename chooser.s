@@ -114,10 +114,12 @@ chooser_init
 ; chooser_read_dir - Read directory entries from kernel into ENTRY_BUF
 ;
 chooser_read_dir
-        ; Reset state
+        ; Reset state - a directory change always drops the filter
         stz chooser_count
         stz chooser_sel
         stz chooser_top
+        stz filter_len
+        stz filter_str
 
         ; Set up kernel event destination
         lda #<event_type
@@ -475,23 +477,90 @@ _ext_tbl
         .byte 0
 
 ;------------------------------------------------------------------------------
-; rebuild_view - rebuild view_map / view_count from the entry list.
-; Identity mapping for now (filtering arrives with the filter feature).
+; rebuild_view - rebuild view_map / view_count: entries whose names
+; contain filter_str (all of them when the filter is empty).
 ; Resets selection and scroll to the top.
 ;
 rebuild_view
+        stz view_count
         stz chooser_sel
         stz chooser_top
+
         ldx #0
 _rv_loop
         cpx chooser_count
         bcs _rv_done
+        phx
         txa
-        sta view_map,x
+        jsr entry_matches       ; C=1 -> entry passes
+        plx
+        bcc _rv_next
+        txa
+        ldy view_count
+        sta view_map,y
+        inc view_count
+_rv_next
         inx
         bra _rv_loop
 _rv_done
-        stx view_count
+        rts
+
+FILTER_MAX = 24
+
+;------------------------------------------------------------------------------
+; entry_matches - does entry A's name contain filter_str?
+;
+; Case-insensitive substring: both sides are normalized with ora #$20
+; (filter_str is already stored normalized). Empty filter matches.
+;
+; A = entry index
+; Returns C=1 on match, C=0 otherwise.
+; Clobbers A, Y, chooser_tmp, chooser_path (scratch, like _check_launchable).
+;
+entry_matches
+        ldy filter_len
+        beq _em_match           ; empty filter matches everything
+
+        jsr get_entry_ptr_a     ; chooser_tmp -> entry name
+
+        stz chooser_path        ; start offset within the name
+_em_start_loop
+        ldy #0                  ; Y = index into filter_str
+_em_cmp_loop
+        lda filter_str,y
+        beq _em_match           ; consumed the whole filter -> match
+        sta chooser_path+1     ; current (pre-normalized) filter char
+        tya
+        clc
+        adc chooser_path       ; name index = start + filter index
+        cmp #ENTRY_NAME_MAX
+        bcs _em_no_match        ; would read past the name field
+        phy
+        tay
+        lda (chooser_tmp),y
+        ply
+        cmp #0                  ; ply set Z from Y - re-test the name char
+        beq _em_no_match        ; name ended mid-compare: later starts
+                                ; are shorter still, so give up entirely
+        ora #$20                ; normalize name side
+        cmp chooser_path+1
+        bne _em_next_start
+        iny
+        bra _em_cmp_loop
+
+_em_next_start
+        ldy chooser_path
+        lda (chooser_tmp),y
+        beq _em_no_match        ; start offset reached end of name
+        inc chooser_path
+        lda chooser_path
+        cmp #ENTRY_NAME_MAX
+        bcc _em_start_loop
+_em_no_match
+        clc
+        rts
+_em_match
+        sec
         rts
 
 ;------------------------------------------------------------------------------
@@ -502,9 +571,20 @@ chooser_draw
         jsr draw_entries
         jsr _draw_bottom_border
 
-        ; Show "(empty)" if directory has no entries
+        ; Show "(empty)" for a bare directory, "(no match)" when the
+        ; filter hides everything
         lda chooser_count
+        beq _cd_empty
+        lda view_count
         bne _cd_done
+        ldx #BOX_LEFT+2
+        ldy #CHOOSER_LIST_LINE
+        jsr TermSetXY
+        lda #<_txt_nomatch
+        ldx #>_txt_nomatch
+        jsr TermPUTS
+        bra _cd_done
+_cd_empty
         ldx #BOX_LEFT+2
         ldy #CHOOSER_LIST_LINE
         jsr TermSetXY
@@ -515,6 +595,7 @@ _cd_done
         rts
 
 _txt_empty .text "(empty)",0
+_txt_nomatch .text "(no match)",0
 _txt_cdroot .text " CD / ",0
 
 ;------------------------------------------------------------------------------
@@ -985,8 +1066,16 @@ _kp_not_right
         bne _cl_not_f3
         jmp _cl_toggle_oldos
 _cl_not_f3
+        cmp #KEY_HOME
+        bne _cl_not_home
+        jmp _cl_filter_clear
+_cl_not_home
         cmp #KEY_BKSP
         bne _cl_not_bksp
+        lda filter_len
+        beq _cl_bksp_parent
+        jmp _cl_filter_bksp
+_cl_bksp_parent
         jmp _chooser_parent_dir
 _cl_not_bksp
         cmp #KEY_DEL
@@ -1004,11 +1093,21 @@ _cl_not_break
         beq _cl_select
         cmp #' '
         beq _cl_select
-        bra _cl_not_select
+        cmp #KEY_ESC
+        bne _cl_not_esc
+        jmp _cl_filter_clear
+_cl_not_esc
+        ; printable $21-$7E appends to the filter
+        cmp #'!'
+        bcc _cl_no_key
+        cmp #$7F
+        bcc _cl_filter_add_j
+_cl_no_key
+        jmp _cl_poll
+_cl_filter_add_j
+        jmp _cl_filter_add
 _cl_select
         jmp _chooser_select
-_cl_not_select
-        jmp _cl_poll
 
 _cl_toggle_oldos
         ; Only allow if kernel supports Chdir
@@ -1022,6 +1121,46 @@ _cl_toggle_oldos
         jmp chooser_loop
 _cl_toggle_skip
         jmp _cl_poll
+
+;--------------------------------------
+; _cl_filter_add - append the typed char (in A) to the filter
+;
+_cl_filter_add
+        ldy filter_len
+        cpy #FILTER_MAX
+        bcs _cf_done            ; filter full - ignore keystroke
+        ora #$20                ; store normalized for the matcher
+        sta filter_str,y
+        iny
+        lda #0
+        sta filter_str,y        ; keep null terminated
+        sty filter_len
+        bra _cf_refresh
+
+;--------------------------------------
+; _cl_filter_bksp - drop the last filter char (filter known non-empty)
+;
+_cl_filter_bksp
+        ldy filter_len
+        dey
+        sty filter_len
+        lda #0
+        sta filter_str,y
+        bra _cf_refresh
+
+;--------------------------------------
+; _cl_filter_clear - drop the whole filter
+;
+_cl_filter_clear
+        lda filter_len
+        beq _cf_done            ; nothing to clear
+        stz filter_len
+        stz filter_str
+_cf_refresh
+        jsr rebuild_view
+        jsr chooser_draw
+_cf_done
+        jmp chooser_loop
 
 ;--------------------------------------
 ; _snapshot_frame - read frame counter into repeat_start
