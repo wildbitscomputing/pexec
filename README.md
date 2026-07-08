@@ -11,6 +11,9 @@ lbm - image viewer (8bit 256 color only)
 
 256 - image viewer (320x200 or 320x240)
 
+File Chooser - interactive file browser with type-to-filter, shown when
+no file argument is given
+
 Written by dwsJason and csoren
 Foenix Retro Systems logo by econtrerasd
 
@@ -40,8 +43,8 @@ contribute.
 
      - PATH support
 
-     - File Chooser (if no args passed, or file not found this would be
-       really nice.  Something like Bitsy Bye for those familiar)
+     - Fall back to the file chooser when a named file isn't found
+       (the chooser is currently only shown when no argument is passed)
 
      - Image viewer needs error checking
 
