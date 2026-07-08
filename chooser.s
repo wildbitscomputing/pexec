@@ -66,6 +66,9 @@ repeat_delay   = $9F   ; 1 byte - frames to wait before next repeat
 repeat_start   = $A0   ; 1 byte - frame counter snapshot at start of wait
 chooser_fname  = $A1   ; 1 byte - offset of filename within ARGS_PATH
 chooser_chdir_len = $A2 ; 1 byte - length of the chdir path
+view_count     = $A3   ; 1 byte - number of entries passing the filter
+filter_len     = $A4   ; 1 byte - length of the typed filter
+chooser_mul    = $A5   ; 1 byte - get_entry_ptr_a multiply scratch
 
 ; Repeat timing (via hardware frame counter at $D659)
 REPEAT_INITIAL = 15    ; ~250ms at 60Hz
@@ -204,7 +207,7 @@ _on_eof
         jmp _event_loop
 
 _on_closed
-        rts
+        jmp rebuild_view        ; tail call: fresh dir needs a fresh view
 
 _on_file
         ; Check ATTR_HIDDEN flag - skip hidden files
@@ -470,6 +473,26 @@ _ext_tbl
         .byte 0
 
 ;------------------------------------------------------------------------------
+; rebuild_view - rebuild view_map / view_count from the entry list.
+; Identity mapping for now (filtering arrives with the filter feature).
+; Resets selection and scroll to the top.
+;
+rebuild_view
+        stz chooser_sel
+        stz chooser_top
+        ldx #0
+_rv_loop
+        cpx chooser_count
+        bcs _rv_done
+        txa
+        sta view_map,x
+        inx
+        bra _rv_loop
+_rv_done
+        stx view_count
+        rts
+
+;------------------------------------------------------------------------------
 ; chooser_draw - render box, path, entries, bottom border
 ;
 chooser_draw
@@ -649,7 +672,7 @@ _de_loop
         bcs _de_done
 
         ; Are there more entries to show?
-        cpx chooser_count
+        cpx view_count
         bcs _de_clear_rest
 
         ; Draw this entry
@@ -707,8 +730,9 @@ _draw_one_entry
         stx chooser_idx
         sty term_y              ; set term_y for set_line_color
 
-        ; Calculate entry pointer
-        lda chooser_idx
+        ; Calculate entry pointer (chooser_idx is a view position)
+        ldx chooser_idx
+        lda view_map,x
         jsr get_entry_ptr_a     ; chooser_tmp = pointer to entry
 
         ; Get flags
@@ -746,7 +770,8 @@ _doe_set_color
         jsr TermCOUT
 
         ; Recalculate entry pointer (was clobbered by set_line_color)
-        lda chooser_idx
+        ldx chooser_idx
+        lda view_map,x
         jsr get_entry_ptr_a
 
         ; If directory, print "/" prefix
@@ -817,7 +842,7 @@ _slc_lp sta (chooser_tmp),y
 ;
 get_entry_ptr_a
         ; Multiply A by ENTRY_SIZE (33 = 32+1)
-        sta chooser_idx
+        sta chooser_mul
         stz chooser_tmp+1
 
         ; A * 32
@@ -836,7 +861,7 @@ get_entry_ptr_a
         ; + original A
         clc
         lda chooser_tmp
-        adc chooser_idx
+        adc chooser_mul
         sta chooser_tmp
         lda chooser_tmp+1
         adc #0
@@ -1049,7 +1074,7 @@ _cl_move_down
         lda chooser_sel
         clc
         adc #1
-        cmp chooser_count
+        cmp view_count
         bcs _cl_down_done
 
         inc chooser_sel
@@ -1111,9 +1136,9 @@ _cl_move_pgdn
         lda chooser_sel
         clc
         adc #PAGE_JUMP
-        cmp chooser_count
+        cmp view_count
         bcc _pgdn_ok
-        lda chooser_count
+        lda view_count
         beq _pgdn_done          ; empty directory
         sec
         sbc #1                  ; clamp to last entry
@@ -1141,12 +1166,13 @@ _pgdn_done
 ; Enter - select the highlighted entry
 ;
 _chooser_select
-        ; Do nothing if directory is empty
-        lda chooser_count
+        ; Do nothing if nothing is visible
+        lda view_count
         beq _cs_nothing
 
-        ; Get pointer to the selected entry
-        lda chooser_sel
+        ; Get pointer to the selected entry (chooser_sel is a view position)
+        ldx chooser_sel
+        lda view_map,x
         jsr get_entry_ptr_a         ; chooser_tmp -> entry
 
         ; Read flags byte
@@ -1218,7 +1244,10 @@ _cs_cp_path_done
         ; X = index into destination (after path)
         stx chooser_fname           ; filename starts here within ARGS_PATH
         ; Now append the filename from the selected entry
-        lda chooser_sel
+        phx
+        ldx chooser_sel
+        lda view_map,x
+        plx
         jsr get_entry_ptr_a         ; chooser_tmp -> entry
 
         ldy #0

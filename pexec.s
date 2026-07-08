@@ -82,6 +82,8 @@ pExt .fill 2		  ; used by the alternate_open
 	.virtual $400
 scratch_path .fill 256
 try_count .fill 1
+view_map .fill 128       ; chooser: entry indices passing the filter
+filter_str .fill 25      ; chooser: typed filter, null terminated
 	.endv
 
 ; copy of the mmu_lock function, down to zero page
