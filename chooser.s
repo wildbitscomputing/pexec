@@ -665,6 +665,20 @@ _draw_bottom_border
         lda #BOX_BL
         jsr TermCOUT
 
+        ; live filter indicator: "> <filter> " when active
+        lda filter_len
+        beq _bb_no_filter
+        lda #' '
+        jsr TermCOUT
+        lda #'>'
+        jsr TermCOUT
+        lda #<filter_str
+        ldx #>filter_str
+        jsr TermPUTS
+        lda #' '
+        jsr TermCOUT
+_bb_no_filter
+
         ; If CD/ enabled, stop fill early to fit indicator before corner
         ; " CD / " = 6 chars, so stop at BOX_RIGHT - 6
         lda chooser_oldos
