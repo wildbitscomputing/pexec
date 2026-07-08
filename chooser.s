@@ -64,6 +64,8 @@ chooser_chdir  = $9C   ; 2 bytes - pointer to chdir path (0=none)
 repeat_key     = $9E   ; 1 byte - raw key code being repeated (0=none)
 repeat_delay   = $9F   ; 1 byte - frames to wait before next repeat
 repeat_start   = $A0   ; 1 byte - frame counter snapshot at start of wait
+chooser_fname  = $A1   ; 1 byte - offset of filename within ARGS_PATH
+chooser_chdir_len = $A2 ; 1 byte - length of the chdir path
 
 ; Repeat timing (via hardware frame counter at $D659)
 REPEAT_INITIAL = 15    ; ~250ms at 60Hz
@@ -72,6 +74,12 @@ FRAME_COUNTER  = $D659 ; F256K hardware frame counter (low byte, I/O page)
 
 ; Trash buffer for consuming data we don't need
 TRASH_BUF = scratch_path+128
+
+; Parameter area for launched programs. The platform reserves $200-$2FF
+; for pexec parameters - programs using args load no lower than $0300,
+; so anything we hand to a launched program must live in this page.
+ARGS_TABLE = $200          ; 6 bytes: abs ptr, rel ptr, null terminator
+ARGS_PATH  = ARGS_TABLE+6  ; absolute path string
 
 ; Colors
 COLOR_NORMAL   = $F2   ; white on blue (matches existing)
@@ -1196,17 +1204,19 @@ _cs_name_done
 ; Launch a file
 ;
 _cs_launch
-        ; Build full path in scratch_path+128 ($480)
+        ; Build full path in ARGS_PATH ($206) - the reserved parameter
+        ; page, so the string survives the program load.
         ; First copy scratch_path until null
         ldx #0
 _cs_cp_path
         lda scratch_path,x
         beq _cs_cp_path_done
-        sta scratch_path+128,x
+        sta ARGS_PATH,x
         inx
         bne _cs_cp_path
 _cs_cp_path_done
         ; X = index into destination (after path)
+        stx chooser_fname           ; filename starts here within ARGS_PATH
         ; Now append the filename from the selected entry
         lda chooser_sel
         jsr get_entry_ptr_a         ; chooser_tmp -> entry
@@ -1215,18 +1225,18 @@ _cs_cp_path_done
 _cs_cp_fname
         lda (chooser_tmp),y
         beq _cs_fname_done
-        sta scratch_path+128,x
+        sta ARGS_PATH,x
         inx
         iny
         cpy #ENTRY_NAME_MAX
         bcc _cs_cp_fname
 _cs_fname_done
-        stz scratch_path+128,x     ; null terminate
+        stz ARGS_PATH,x            ; null terminate
 
-        ; Set pArg to scratch_path+128
-        lda #<(scratch_path+128)
+        ; Set pArg to ARGS_PATH
+        lda #<ARGS_PATH
         sta pArg
-        lda #>(scratch_path+128)
+        lda #>ARGS_PATH
         sta pArg+1
 
         ; Set drive
@@ -1263,11 +1273,10 @@ _cs_no_chdir
         jsr fopen
         bcc _cs_opened
 
-        ; Primary open failed - try alternate extensions
-        jsr alternate_open
-        bcc _cs_opened
-
-        ; Both failed - show error
+        ; Open failed - show error. No alternate_open fallback here:
+        ; the name came from the directory listing so extension guessing
+        ; can't help, and alternate_open would clobber scratch_path,
+        ; which chooser_chdir points at for the deferred chdir.
         pha
         lda #<txt_error_open
         ldx #>txt_error_open
@@ -1307,38 +1316,43 @@ _cs_opened
         jmp wait_for_key
 
 _cs_got4
-        ; Build args table at scratch_path+120:
-        ;   [arg0_lo, arg0_hi, arg1_lo, arg1_hi]
-        ;   arg0 = pArg (absolute path, for loaders to re-open via get_arg)
-        ;   arg1 = pArg+1 (skip leading /, relative path for launched program)
+        ; Build args table at ARGS_TABLE ($200):
+        ;   [arg0_lo, arg0_hi, arg1_lo, arg1_hi, 0, 0]
+        ;   arg0 = pArg (absolute path, printed by the loaders)
+        ;   arg1 = pArg+1 (skip leading /, root-relative path for the
+        ;          launched program; the chdir-mode branch below replaces
+        ;          this with the bare filename when we chdir to the dir)
         ;
-        ; This matches command-line behavior where the program receives
-        ; a relative path like "lkdemo/lk.pgZ" not "/lkdemo/lk.pgZ"
+        ; This matches command-line behavior: the program receives the
+        ; path relative to its cwd, e.g. "lkdemo/lk.pgZ" from root, or
+        ; "lk.pgZ" after a chdir into lkdemo.
         lda pArg
-        sta scratch_path+120         ; arg[0] low (absolute)
+        sta ARGS_TABLE               ; arg[0] low (absolute)
         clc
         adc #1
-        sta scratch_path+122         ; arg[1] low (skip leading /)
+        sta ARGS_TABLE+2             ; arg[1] low (skip leading /)
         lda pArg+1
-        sta scratch_path+121         ; arg[0] high
+        sta ARGS_TABLE+1             ; arg[0] high
         adc #0
-        sta scratch_path+123         ; arg[1] high
-        stz scratch_path+124         ; null terminator
-        stz scratch_path+125
+        sta ARGS_TABLE+3             ; arg[1] high
+        stz ARGS_TABLE+4             ; null terminator (not counted in extlen)
+        stz ARGS_TABLE+5
 
         ; kernel_args_ext = full table (for get_arg in loaders)
-        lda #<(scratch_path+120)
+        lda #<ARGS_TABLE
         sta kernel_args_ext
-        lda #>(scratch_path+120)
+        lda #>ARGS_TABLE
         sta kernel_args_ext+1
 
-        ; args_buf = arg[1] entry (relative path, for launched program)
-        ; +2 for null terminator so programs that scan for it find it
-        lda #<(scratch_path+122)
+        ; args_buf = arg[1] entry: the launched program's arg[0] is the
+        ; relative path, followed by the null terminator pointer.
+        ; extlen counts only real pointers (2 bytes), never the terminator -
+        ; same as a command-line launch.
+        lda #<(ARGS_TABLE+2)
         sta args_buf
-        lda #>(scratch_path+122)
+        lda #>(ARGS_TABLE+2)
         sta args_buf+1
-        lda #4                       ; 1 pointer + null terminator = 4 bytes
+        lda #2                       ; 1 argument = 2 bytes
         sta args_buflen
 
         ; Set up deferred chdir for launchProgram (after file is loaded)
@@ -1349,12 +1363,26 @@ _cs_got4
         lda chooser_oldos
         bne _cs_set_root
 
-        ; CD to chooser's current directory
-        ; scratch_path still has the dir path (not clobbered yet)
-        lda #<scratch_path
+        ; CD to the file's directory. The dir path is the first
+        ; chooser_fname bytes of ARGS_PATH - use that copy, not
+        ; scratch_path: the program load may overwrite the $400 page
+        ; before the deferred chdir fires, but $200-$2FF is reserved.
+        lda #<ARGS_PATH
         sta chooser_chdir
-        lda #>scratch_path
+        lda #>ARGS_PATH
         sta chooser_chdir+1
+        lda chooser_fname
+        sta chooser_chdir_len
+
+        ; cwd will be the file's directory, so the program's arg
+        ; must be just the filename
+        clc
+        lda #<ARGS_PATH
+        adc chooser_fname
+        sta ARGS_TABLE+2
+        lda #>ARGS_PATH
+        adc #0
+        sta ARGS_TABLE+3
         bra _cs_do_exec
 
 _cs_set_root
@@ -1363,6 +1391,8 @@ _cs_set_root
         sta chooser_chdir
         lda #>_cs_root_path
         sta chooser_chdir+1
+        lda #1
+        sta chooser_chdir_len
         bra _cs_do_exec
 
 _cs_no_cd

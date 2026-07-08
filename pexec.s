@@ -506,16 +506,10 @@ launchProgram
 		sta kernel_args_buf
 		lda chooser_chdir+1
 		sta kernel_args_buf+1
-		; Calculate path length
-		ldy #0
-		lda (chooser_chdir),y
-_chdir_len
-		beq _chdir_go
-		iny
-		lda (chooser_chdir),y
-		bra _chdir_len
-_chdir_go
-		sty kernel_args_buflen
+		; Length comes from the chooser - the path is a prefix of
+		; ARGS_PATH, not null terminated, so no scanning here
+		lda chooser_chdir_len
+		sta kernel_args_buflen
 		lda chooser_drive
 		sta kernel_args_directory_open_drive
 		jsr kernel_Chdir
