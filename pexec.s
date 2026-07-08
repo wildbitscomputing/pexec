@@ -982,7 +982,7 @@ _done_copy
 
 ;------------------------------------------------------------------------------
 ; Strings and other includes
-txt_version .text "Pexec 0.70"
+txt_version .text "Pexec 0.71"
 		.byte 13,13,0
 
 txt_press_key .byte 13
