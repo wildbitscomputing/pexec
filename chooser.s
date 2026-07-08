@@ -1044,8 +1044,16 @@ _rpt_not_down
         jmp _cl_move_pgup
 _rpt_not_left
         cmp #KEY_RIGHT
-        bne _rpt_done
+        bne _rpt_not_right
         jmp _cl_move_pgdn
+_rpt_not_right
+        cmp #KEY_BKSP
+        bne _rpt_done
+        lda filter_len
+        beq _rpt_bksp_stop      ; filter emptied - stop, don't jump to parent
+        jmp _cl_filter_bksp
+_rpt_bksp_stop
+        stz repeat_key
 _rpt_done
         jmp _cl_poll
 
@@ -1088,6 +1096,12 @@ _cl_not_home
         bne _cl_not_bksp
         lda filter_len
         beq _cl_bksp_parent
+        ; non-empty filter: arm key repeat, then delete a char
+        lda #KEY_BKSP
+        sta repeat_key
+        lda #REPEAT_INITIAL
+        sta repeat_delay
+        jsr _snapshot_frame
         jmp _cl_filter_bksp
 _cl_bksp_parent
         jmp _chooser_parent_dir
